@@ -1,0 +1,72 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+struct Vec3 { float x, y, z; };
+
+struct Particle {
+    Vec3 pos;
+    Vec3 oldPos;
+    Vec3 accel;
+    bool isStatic;
+};
+
+struct Constraint {
+    int p1_idx;
+    int p2_idx;
+    float restLength;
+};
+
+class VerletCloth {
+public:
+    std::vector<Particle> particles;
+    std::vector<Constraint> constraints;
+
+    void applyWind(const Vec3& windForce) {
+        for (auto& p : particles) {
+            if (!p.isStatic) {
+                p.accel.x += windForce.x;
+                p.accel.y += windForce.y;
+                p.accel.z += windForce.z;
+            }
+        }
+    }
+
+    void stepVerlet(float dt) {
+        for (auto& p : particles) {
+            if (p.isStatic) continue;
+
+            Vec3 temp = p.pos;
+            // Verlet formula: x_next = x + (x - x_old) + a * dt^2
+            p.pos.x += (p.pos.x - p.oldPos.x) + p.accel.x * dt * dt;
+            p.pos.y += (p.pos.y - p.oldPos.y) + p.accel.y * dt * dt;
+            p.pos.z += (p.pos.z - p.oldPos.z) + p.accel.z * dt * dt;
+            p.oldPos = temp;
+
+            // Reset acceleration for next frame
+            p.accel = {0.0f, 0.0f, 0.0f}; 
+        }
+    }
+
+    void satisfyConstraints() {
+        // Typically run 3-5 times per step to rigidly maintain structural integrity
+        for (int iterations = 0; iterations < 3; ++iterations) {
+            for (auto& c : constraints) {
+                Particle& p1 = particles[c.p1_idx];
+                Particle& p2 = particles[c.p2_idx];
+
+                float dx = p2.pos.x - p1.pos.x;
+                float dy = p2.pos.y - p1.pos.y;
+                float dz = p2.pos.z - p1.pos.z;
+                float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+                float diff = c.restLength - dist;
+                float percent = (diff / dist) * 0.5f;
+
+                Vec3 offset = {dx * percent, dy * percent, dz * percent};
+
+                if (!p1.isStatic) { p1.pos.x -= offset.x; p1.pos.y -= offset.y; p1.pos.z -= offset.z; }
+                if (!p2.isStatic) { p2.pos.x += offset.x; p2.pos.y += offset.y; p2.pos.z += offset.z; }
+            }
+        }
+    }
+};
