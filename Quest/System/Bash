@@ -1,0 +1,4 @@
+bash
+
+cd /home/claude/solo_leveling && g++ -std=c++17 -Wall -Wextra -O2 -o solo_leveling main.cpp QuestSystem.cpp 2>&1
+Output
