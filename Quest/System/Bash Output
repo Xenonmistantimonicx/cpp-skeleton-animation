@@ -1,0 +1,154 @@
+Output
+
+main.cpp: In function 'std::string pickQuestId(SoloLeveling::QuestManager&)':
+main.cpp:89:39: warning: unused parameter 'qm' [-Wunused-parameter]
+   89 | std::string pickQuestId(QuestManager& qm) {
+      |                         ~~~~~~~~~~~~~~^~
+QuestSystem.cpp: In member function 'int SoloLeveling::Quest::secondsRemaining() const':
+QuestSystem.cpp:131:39: error: 'INT_MAX' was not declared in this scope
+  131 |     if (timeLimitSeconds <= 0) return INT_MAX;
+      |                                       ^~~~~~~
+QuestSystem.cpp:13:1: note: 'INT_MAX' is defined in header '<climits>'; did you forget to '#include <climits>'?
+   12 | #include <cassert>
+  +++ |+#include <climits>
+   13 | 
+QuestSystem.cpp: In member function 'void SoloLeveling::Player::print() const':
+QuestSystem.cpp:210:42: error: 'static std::string SoloLeveling::SystemMessage::rankColor(SoloLeveling::Rank)' is private within this context
+  210 |               << SystemMessage::rankColor(hunterRank)
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+In file included from QuestSystem.cpp:6:
+QuestSystem.h:211:24: note: declared private here
+  211 |     static std::string rankColor(Rank r);   // ANSI color codes
+      |                        ^~~~~~~~~
+QuestSystem.cpp: In member function 'void SoloLeveling::QuestManager::unlockDependentQuests(const SoloLeveling::Quest&, SoloLeveling::Player&)':
+QuestSystem.cpp:431:70: warning: unused parameter 'player' [-Wunused-parameter]
+  431 | void QuestManager::unlockDependentQuests(const Quest& quest, Player& player) {
+      |                                                              ~~~~~~~~^~~~~~
+QuestSystem.cpp: In member function 'void SoloLeveling::QuestManager::printQuestBoard(bool) const':
+QuestSystem.cpp:577:46: error: 'static std::string SoloLeveling::SystemMessage::rankColor(SoloLeveling::Rank)' is private within this context
+  577 |                   << SystemMessage::rankColor(q.rank)
+      |                      ~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~
+QuestSystem.h:211:24: note: declared private here
+  211 |     static std::string rankColor(Rank r);   // ANSI color codes
+      |                        ^~~~~~~~~
+QuestSystem.cpp: In member function 'void SoloLeveling::QuestManager::printQuestDetail(const std::string&) const':
+QuestSystem.cpp:607:42: error: 'static std::string SoloLeveling::SystemMessage::rankColor(SoloLeveling::Rank)' is private within this context
+  607 |               << SystemMessage::rankColor(q.rank) << "[" << rankToString(q.rank) << "-RANK]" << RST << "\n";
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~
+QuestSystem.h:211:24: note: declared private here
+  211 |     static std::string rankColor(Rank r);   // ANSI color codes
+      |                        ^~~~~~~~~
+QuestSystem.cpp:647:17: warning: this 'if' clause does not guard... [-Wmisleading-indentation]
+  647 |                 if (r.item) std::cout << "    " << MAG << "Item      " << r.item->name << RST << "\n"; break;
+      |                 ^~
+QuestSystem.cpp:647:104: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the 'if'
+  647 |                 if (r.item) std::cout << "    " << MAG << "Item      " << r.item->name << RST << "\n"; break;
+      |                                                                                                        ^~~~~
+QuestSystem.cpp: In member function 'void SoloLeveling::QuestManager::printActiveQuests() const':
+QuestSystem.cpp:677:54: error: 'static std::string SoloLeveling::SystemMessage::rankColor(SoloLeveling::Rank)' is private within this context
+  677 |         std::cout << "  " << SystemMessage::rankColor(q->rank)
+      |                              ~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~
+QuestSystem.h:211:24: note: declared private here
+  211 |     static std::string rankColor(Rank r);   // ANSI color codes
+      |                        ^~~~~~~~~
+QuestSystem.cpp: In static member function 'static void SoloLeveling::SystemMessage::rewardGranted(const SoloLeveling::RewardEntry&)':
+QuestSystem.cpp:797:13: warning: this 'if' clause does not guard... [-Wmisleading-indentation]
+  797 |             if (r.item) std::cout << "  " << MAG << "[ ITEM ] " << r.item->name << RST << "\n"; break;
+      |             ^~
+QuestSystem.cpp:797:97: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the 'if'
+  797 |             if (r.item) std::cout << "  " << MAG << "[ ITEM ] " << r.item->name << RST << "\n"; break;
+      |                                                                                                 ^~~~~
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeDailyTraining()':
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+  845 |     };
+      |     ^
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:845:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeDoubleGateDungeon()':
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+  881 |     };
+      |     ^
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:881:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makePenaltyQuest()':
+QuestSystem.cpp:912:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+  912 |     };
+      |     ^
+QuestSystem.cpp:912:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:912:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeEmergencyEvacuation()':
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+  945 |     };
+      |     ^
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:945:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeGuildWar()':
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+  973 |     };
+      |     ^
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:973:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeHiddenMonarchPath()':
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+ 1001 |     };
+      |     ^
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1001:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeShadowExtractionMission()':
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+ 1027 |     };
+      |     ^
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1027:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeItemCollectionQuest(const std::string&, const std::string&, int, SoloLeveling::Rank)':
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+ 1053 |     };
+      |     ^
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1053:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp: In static member function 'static SoloLeveling::Quest SoloLeveling::QuestFactory::makeKillQuest(const std::string&, const std::string&, int, SoloLeveling::Rank)':
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+ 1079 |     };
+      |     ^
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::item' [-Wmissing-field-initializers]
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::statBoost' [-Wmissing-field-initializers]
+QuestSystem.cpp:1079:5: warning: missing initializer for member 'SoloLeveling::RewardEntry::title' [-Wmissing-field-initializers]
