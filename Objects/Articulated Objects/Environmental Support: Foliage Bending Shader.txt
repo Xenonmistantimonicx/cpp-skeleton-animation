@@ -1,0 +1,31 @@
+// AAA Foliage Bending Support Function
+// Applies procedural vertex offset to grass based on the stone's physical proximity
+
+void ApplyStoneDeformation_float(
+    float3 VertexPositionWS,    // Current World Position of the grass vertex
+    float3 StonePositionWS,     // Passed from CPU: The moving stone's current position
+    float InteractionRadius,    // How far the stone's weight pushes grass (e.g., 1.5 meters)
+    float BendStrength,         // Intensity of the plant flattening
+    float VertexObjectHeight,   // UV or Vertex color masking the tip of the grass (don't bend the roots!)
+    out float3 OutOffsetWS      // Output displacement vector to add to the vertex position
+)
+{
+    // 1. Calculate direction and distance from the stone to this specific blade of grass
+    float3 direction = VertexPositionWS - StonePositionWS;
+    direction.y = 0; // Keep the push strictly on the horizontal plane for realistic flattening
+    
+    float distanceToStone = length(direction);
+    
+    // 2. Falloff calculation: Strongest push near the center of the stone, fading outwards
+    float attenuation = 1.0 - saturate(distanceToStone / InteractionRadius);
+    
+    // 3. Prevent mathematical errors if the stone is exactly on top of the vertex
+    float3 pushDirection = safeNormalize(direction);
+    
+    // 4. Combine vectors: Flatten the grass downward and outward, scaled by vertex height
+    // (VertexObjectHeight ensures the roots stay firmly planted in the dirt)
+    float3 bendVector = float3(pushDirection.x, -0.7, pushDirection.z) * BendStrength * attenuation * VertexObjectHeight;
+    
+    // 5. Output the final world-space offset
+    OutOffsetWS = bendVector;
+}
