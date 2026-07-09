@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eucalyptus (Gum Tree) - Fluid Architecture Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #020505;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: monospace;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(56, 189, 248, 0.1);
+            border: 1px solid #0f1c1c;
+            border-radius: 8px;
+        }
+        #eucalyptus-hud {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #94a3b8;
+            background: rgba(4, 10, 10, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #112929;
+            pointer-events: none;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .highlight { color: #38bdf8; font-weight: bold; }
+        .oil-alert { color: #a3e635; }
+    </style>
+</head>
+<body>
+
+    <div id="eucalyptus-hud">
+        GENUS: <span style="color:#22c55e; font-weight:bold;">Eucalyptus</span><br>
+        BARK TYPE: <span class="highlight">Smooth Ribbon Peeling</span><br>
+        CLIMATE STATE: <span id="climate-phase" class="highlight">ARID DRYING</span><br>
+        CINEOL OIL DENSITY: <span id="oil-density" class="oil-alert">High (Aromatic)</span>
+    </div>
+
+    <canvas id="eucalyptusCanvas" width="1000" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('eucalyptusCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Ecosystem Cycles
+        const CYCLES = ['SPRING_MIST', 'SUMMER_ARID', 'AUTUMN_WIND_SHED', 'WINTER_REST'];
+        let cycleIdx = 0;
+        let cycleTimer = 0;
+        const CYCLE_DURATION = 400;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+        let time = 0;
+
+        // Oil-Rich Blue-Grey & Sage Green Palettes
+        const EUCALYPTUS_SAGE = ['#52796f', '#354f52', '#6b9080', '#2f3e46', '#83c5be'];
+        const EUCALYPTUS_OLD = ['#b5838d', '#a26769', '#6d5959']; // Bronze/red fading leaves
+
+        const branches = [];
+        const barkRibbons = [];
+        const leaves = [];
+        const groundLitter = [];
+
+        // 1. TALL SLENDER VERTICAL TRUNK AND UPRIGHT CROWN ENGINE
+        function growEucalyptus(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                startX: x, startY: y,
+                endX: endX, endY: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Eucalyptus splits into highly vertical, sparse, upward-reaching tiers
+            const splitCount = depth > 5 ? 2 : (Math.random() < 0.6 ? 3 : 2);
+            for(let i=0; i<splitCount; i++) {
+                const angleSpread = 0.35 * (Math.random() - 0.5);
+                // Force branches to maintain steep upward orientation (-Math.PI/2)
+                const nextAngle = angle * 0.85 + (i - (splitCount - 1) / 2) * 0.32 + angleSpread;
+                const nextLength = length * (0.76 + Math.random() * 0.08);
+                const nextWidth = width * 0.7;
+
+                growEucalyptus(endX, endY, nextLength, nextAngle, depth - 1, nextWidth);
+            }
+
+            // Procedural bark ribbons attached along the main trunk segments
+            if (width > 8 && Math.random() < 0.25) {
+                barkRibbons.push({
+                    sx: x, sy: y, ex: endX, ey: endY,
+                    peelOffset: 0,
+                    isFullyShed: false,
+                    width: width * 0.25,
+                    color: '#6d4c41'
+                });
+            }
+        }
+
+        // Initialize: Tall, column-like structural scaling
+        growEucalyptus(500, 640, 140, -Math.PI / 2, 8, 20);
+
+        // 2. VERTICAL PENDULOUS (HANGING DOWN) LANCE-SHAPE LEAF SYSTEM
+        class EucalyptusLeaf {
+            constructor(parentTwig) {
+                this.anchorX = parentTwig.endX + (Math.random() - 0.5) * 35;
+                this.anchorY = parentTwig.endY + (Math.random() - 0.5) * 35;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.length = 16 + Math.random() * 12;
+                this.width = 4 + Math.random() * 3;
+                this.baseAngle = Math.PI / 2 + (Math.random() - 0.5) * 0.2; // Pointing vertically DOWNWARDS
+                this.angle = this.baseAngle;
+
+                this.freshColor = EUCALYPTUS_SAGE[Math.floor(Math.random() * EUCALYPTUS_SAGE.length)];
+                this.oldColor = EUCALYPTUS_OLD[Math.floor(Math.random() * EUCALYPTUS_OLD.length)];
+                this.currentColor = this.freshColor;
+                this.isOld = Math.random() < 0.15; // Random old leaf distribution
+                
+                if(this.isOld) this.currentColor = this.oldColor;
+
+                this.attached = true;
+                this.vx = 0; this.vy = 0;
+                this.swayFreq = 0.03 + Math.random() * 0.04;
+                this.phase = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.phase += this.swayFreq;
+                const currentCycle = CYCLES[cycleIdx];
+
+                if (this.attached) {
+                    // Fluid pendulum swing motion (unique to vertical eucalyptus leaves)
+                    const pendulumSway = Math.sin(time + this.phase) * (wind * 0.6);
+                    this.angle = this.baseAngle + pendulumSway;
+                    this.x = this.anchorX + Math.sin(this.phase) * (wind * 1.5);
+                    this.y = this.anchorY + (this.length * 0.1);
+
+                    if (currentCycle === 'SUMMER_ARID' && this.isOld) {
+                        // Drought conditions strip old leaves fast to save core water
+                        if (Math.random() < 0.0009 * wind) this.attached = false;
+                    }
+                    else if (currentCycle === 'AUTUMN_WIND_SHED' && Math.random() < 0.0004 * wind) {
+                        this.attached = false;
+                    }
+                    else if (currentCycle === 'SPRING_MIST') {
+                        if(!this.attached) {
+                            this.attached = true;
+                            this.currentColor = this.freshColor;
+                            this.isOld = Math.random() < 0.15;
+                            this.x = this.anchorX; this.y = this.anchorY;
+                        }
+                    }
+                } else {
+                    // SLENDER LEAF FLIGHT KINEMATICS
+                    this.vy += 0.03; // Aerodynamic rapid dive
+                    this.vx += (wind * 0.12) + Math.sin(this.phase) * 0.2;
+                    this.vx *= 0.97; this.vy *= 0.96;
+
+                    this.x += this.vx; this.y += this.vy;
+                    this.angle += 0.05;
+
+                    const groundY = 635 + Math.sin(this.x * 0.004) * 12;
+                    if (this.y >= groundY) {
+                        groundLitter.push({
+                            x: this.x, y: groundY, len: this.length, color: this.currentColor, angle: this.angle, alpha: 0.8, type: 'leaf'
+                        });
+                        // Reset node back to tree canopy for evergreen continuity
+                        this.attached = true;
+                        this.x = this.anchorX; this.y = this.anchorY;
+                        if(Math.random() < 0.2) { this.isOld = true; this.currentColor = this.oldColor; } else { this.isOld = false; this.currentColor = this.freshColor; }
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+
+                // Long, Lancet-Shaped Curved Eucalyptus Leaf Vector
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(this.width * 0.8, this.length * 0.3, this.width * 0.2, this.length); // Slender curved tip
+                ctx.quadraticCurveTo(-this.width * 0.6, this.length * 0.3, 0, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Instantiation Mapping
+        branches.forEach(b => {
+            if (b.depth <= 4) {
+                const leafDensity = Math.floor(6 + Math.random() * 8);
+                for(let i=0; i<leafDensity; i++) leaves.push(new EucalyptusLeaf(b));
+            }
+        });
+
+        // 3. CLIMATE RENDER RUNTIME LOOP
+        function step() {
+            cycleTimer++;
+            time += 0.02;
+
+            if (cycleTimer > CYCLE_DURATION) {
+                cycleTimer = 0;
+                cycleIdx = (cycleIdx + 1) % CYCLES.length;
+            }
+
+            const currentCycle = CYCLES[cycleIdx];
+
+            // Set environmental physics constants depending on Australian seasons
+            let label = "", oilTxt = "Medium";
+            if (currentCycle === 'SPRING_MIST') {
+                label = "SPRING MIST GROWTH"; oilTxt = "Moderate (Fresh)";
+                targetWind = 0.3;
+                if(groundLitter.length > 0) groundLitter.splice(0, 1);
+            } else if (currentCycle === 'SUMMER_ARID') {
+                label = "SUMMER ARID HEAT EXTENSION"; oilTxt = "CRITICAL (Flammable Vapour)";
+                targetWind = 0.6 + Math.sin(time) * 0.3;
+            } else if (currentCycle === 'AUTUMN_WIND_SHED') {
+                label = "AUTUMN EQUINOX SHEDDING"; oilTxt = "High (Volatile)";
+                targetWind = 2.0 + Math.sin(cycleTimer * 0.05) * 1.0; // Heavy dry wind gust storms
+            } else if (currentCycle === 'WINTER_REST') {
+                label = "WINTER SYSTEM EQUILIBRIUM"; oilTxt = "Low (Condensed)";
+                targetWind = 0.4;
+            }
+
+            wind += (targetWind - wind) * 0.03;
+
+            document.getElementById('climate-phase').innerText = label;
+            document.getElementById('oil-density').innerText = oilTxt;
+
+            // Render Outback Atmospheric Background Gradients
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentCycle === 'SUMMER_ARID' || currentCycle === 'AUTUMN_WIND_SHED') {
+                sky.addColorStop(0, '#16191b'); sky.addColorStop(0.6, '#13110e'); sky.addColorStop(1, '#050403'); // Warm hazy outback shade
+            } else {
+                sky.addColorStop(0, '#060f12'); sky.addColorStop(1, '#010405');
+            }
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER GHOST-WHITE SMOOTH EUCALYPTUS TRUNK
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                // Distinctive ultra-smooth ivory/whitish-grey inner bark filling
+                const tone = Math.max(20, 75 - b.depth * 5);
+                ctx.strokeStyle = `rgb(${tone + 10}, ${tone + 14}, ${tone + 15})`;
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 2. DYNAMIC PEELING BARK RIBBON PROCESSING
+            barkRibbons.forEach(ribbon => {
+                if (currentCycle === 'AUTUMN_WIND_SHED' && !ribbon.isFullyShed) {
+                    ribbon.peelOffset += 0.08 * wind;
+                    if (ribbon.peelOffset > 25) {
+                        // Ribbon snaps and drops down to ground matrix
+                        ribbon.isFullyShed = true;
+                        groundLitter.push({
+                            x: ribbon.ex + (Math.random() * 40 - 20), y: 635, len: ribbon.width * 4, color: '#4a2f26', angle: 0.3, alpha: 0.7, type: 'bark'
+                        });
+                    }
+                } else if (currentCycle === 'SPRING_MIST') {
+                    ribbon.peelOffset = 0; ribbon.isFullyShed = false; // Fresh bark layer grow loop
+                }
+
+                if (!ribbon.isFullyShed) {
+                    ctx.save();
+                    ctx.strokeStyle = ribbon.color;
+                    ctx.lineWidth = ribbon.width;
+                    ctx.beginPath();
+                    // Curl outwards based on peelOffset
+                    ctx.moveTo(ribbon.sx, ribbon.sy);
+                    ctx.quadraticCurveTo(ribbon.ex + ribbon.peelOffset, (ribbon.sy + ribbon.ey)/2, ribbon.ex + ribbon.peelOffset * 0.3, ribbon.ey);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
+
+            // 3. UPDATE & DRAW LEAF INSTANCES
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 4. RENDER LAYERED FOREST FLOOR COMPOST MATRIX
+            for (let i = groundLitter.length - 1; i >= 0; i--) {
+                let gl = groundLitter[i];
+                if (currentCycle === 'WINTER_REST') gl.alpha -= 0.003;
+                if (gl.alpha <= 0) {
+                    groundLitter.splice(i, 1); continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = gl.alpha;
+                ctx.fillStyle = gl.color;
+                ctx.translate(gl.x, gl.y);
+                ctx.rotate(gl.angle);
+                ctx.beginPath();
+                if (gl.type === 'leaf') {
+                    ctx.ellipse(0, 0, gl.len * 0.4, 2, 0, 0, Math.PI * 2);
+                } else {
+                    ctx.fillRect(0, 0, gl.len, 2); // Bark strips flat on floor
+                }
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 5. DRAW GUM FOREST GROUND LANDSCAPE
+            ctx.fillStyle = '#030606';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 1000; x += 25) {
+                ctx.lineTo(x, 635 + Math.sin(x * 0.004) * 12);
+            }
+            ctx.lineTo(1000, 750);
+            ctx.fill();
+
+            requestAnimationFrame(step);
+        }
+
+        step();
+    </script>
+</body>
+</html>
