@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dragon's Blood Tree (Dracaena cinnabari) - Socotra Matrix</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #030202;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(239, 68, 68, 0.2);
+            border: 1px solid #241111;
+            border-radius: 12px;
+        }
+        #socotra-hud {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            color: #fca5a5;
+            background: rgba(15, 6, 6, 0.95);
+            padding: 22px;
+            border-radius: 8px;
+            border: 1px solid #451a1a;
+            pointer-events: none;
+            font-size: 11px;
+            line-height: 1.8;
+            letter-spacing: 1px;
+        }
+        .highlight { color: #f43f5e; font-weight: bold; }
+        .resin-alert { color: #ef4444; font-weight: bold; animation: bleedGlow 2.5s infinite; }
+        @keyframes bleedGlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+
+    <div id="socotra-hud">
+        BIOME: <span style="color:#f59e0b">Socotra Desert Island</span><br>
+        SPECIES: <span style="color:#fca5a5; font-style:italic;">Dracaena cinnabari</span><br>
+        MORPHOLOGY: <span class="highlight">Dichotomous Flat Crown</span><br>
+        RESIN SECRETION: <span id="resin-status" class="resin-alert">0% VOLATILE</span><br>
+        ATMOSPHERE: <span id="env-state" style="color:#38bdf8">MIST CAPTURE</span>
+    </div>
+
+    <canvas id="dragonsCanvas" width="1000" height="760"></canvas>
+
+    <script>
+        const canvas = document.getElementById('dragonsCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Arid Desert Island Climates
+        const ECOSYSTEM = ['DESERT_MIST', 'SCORCHING_HEAT', 'SIROCCO_STORM', 'HYDRATED_COOL'];
+        let ecoIdx = 0;
+        let ecoTimer = 0;
+        const ECO_DURATION = 400;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+        let time = 0;
+
+        // Colors: Rigid Olive-Grey Spikes & Crimson Cinnabar Sap
+        const LEAF_SPIKES = ['#2d3a2e', '#3a4f3c', '#223325', '#415a44']; // Desaturated desert olive greens
+        const CINNABAR_BLOOD = ['#991b1b', '#7f1d1d', '#b91c1c', '#dc2626'];
+
+        const branches = [];
+        const leafRosettes = [];
+        const bloodDroplets = [];
+
+        // 1. MATHEMATICAL DICHOTOMOUS SPLIT (UMBRELLA FRAMEWORK)
+        // Trunk grows bare and thick, then splits into perfect multi-tier binary systems
+        function growUmbrellaCrown(startX, startY, length, angle, depth, width) {
+            const endX = startX + Math.cos(angle) * length;
+            const endY = startY + Math.sin(angle) * length;
+
+            branches.push({
+                sx: startX, sy: startY, ex: endX, ey: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) {
+                // Leaf rosette terminal point
+                leafRosettes.push({ x: endX, y: endY, angle: angle });
+                return;
+            }
+
+            // Dichotomous branching rules: branch splits strictly into exactly two symmetric pathways
+            const nextLength = length * 0.81;
+            const nextWidth = width * 0.74;
+            
+            // As depth decreases (moving higher), split angle increases to force a flat plateau ceiling
+            const spreadFactor = 0.38 + (6 - depth) * 0.06;
+
+            growUmbrellaCrown(endX, endY, nextLength, angle - spreadFactor, depth - 1, nextWidth);
+            growUmbrellaCrown(endX, endY, nextLength, angle + spreadFactor, depth - 1, nextWidth);
+
+            // Trigger bleeding resin dynamic coordinates on high structural stress points
+            if (depth >= 1 && depth <= 3 && Math.random() < 0.15) {
+                bloodDroplets.push({
+                    cx: endX, cy: endY, vx: 0, vy: 0,
+                    isBleeding: false, activeY: endY,
+                    color: CINNABAR_BLOOD[Math.floor(Math.random() * CINNABAR_BLOOD.length)]
+                });
+            }
+        }
+
+        // Initialize: Stout thick monolithic lower stem branching out massively at level 6
+        growUmbrellaCrown(500, 630, 135, -Math.PI / 2, 6, 26);
+
+        // 2. STIFF SWORD-LIKE ROSETTE LEAF PARTICLES
+        class RigidSpike {
+            constructor(rosette) {
+                this.rosette = rosette;
+                // Pointing upwards away from the branches to trap low atmospheric fog
+                this.spreadAngle = (Math.random() - 0.5) * 1.6 - Math.PI/2; 
+                this.length = 15 + Math.random() * 10;
+                this.color = LEAF_SPIKES[Math.floor(Math.random() * LEAF_SPIKES.length)];
+                this.swayPhase = Math.random() * Math.PI;
+            }
+
+            drawNode(windEffect) {
+                this.swayPhase += 0.05;
+                
+                // Rigid leaves barely move, they transfer vibrational kinetic force instead
+                const finalAngle = this.spreadAngle + Math.sin(this.swayPhase) * (windEffect * 0.03);
+
+                ctx.save();
+                ctx.translate(this.rosette.x, this.rosette.y);
+                ctx.rotate(finalAngle);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 1.8;
+
+                // Sharp linear sword line vectors
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -this.length);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        const activeLeaves = [];
+        leafRosettes.forEach(r => {
+            const clusterDensity = 14; // High packing creates the protective shield ceiling
+            for (let i = 0; i < clusterDensity; i++) {
+                activeLeaves.push(new RigidSpike(r));
+            }
+        });
+
+        // 3. CORE MATRIX RENDER EXECUTION
+        function engine() {
+            ecoTimer++;
+            time += 0.02;
+
+            if (ecoTimer > ECO_DURATION) {
+                ecoTimer = 0;
+                ecoIdx = (ecoIdx + 1) % ECOSYSTEM.length;
+            }
+
+            const currentPhase = ECOSYSTEM[ecoIdx];
+
+            // Set climatic mechanics and resin boiling thresholds
+            let statusLabel = "", bleedChance = 0;
+            if (currentPhase === 'DESERT_MIST') {
+                statusLabel = "COASTAL FOG INVERSION";
+                targetWind = 0.2;
+                bleedChance = 0.0001; // Low
+            } else if (currentPhase === 'SCORCHING_HEAT') {
+                statusLabel = "THERMAL EVAPORATION SPIKE";
+                targetWind = 0.4;
+                bleedChance = 0.005; // Intense heat triggers bleeding defenses
+            } else if (currentPhase === 'SIROCCO_STORM') {
+                statusLabel = "SIROCCO DUST GALES";
+                targetWind = 2.4 + Math.sin(ecoTimer * 0.06) * 1.0;
+                bleedChance = 0.002;
+            } else if (currentPhase === 'HYDRATED_COOL') {
+                statusLabel = "EQUILIBRIUM COOLDOWN";
+                targetWind = 0.3;
+                bleedChance = 0.0;
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            document.getElementById('env-state').innerText = statusLabel;
+            const liveBleeders = bloodDroplets.filter(d => d.isBleeding).length;
+            document.getElementById('resin-status').innerText = liveBleeders > 0 ? `${liveBleeders} STRESS NODES BLEEDING` : "STABLE EQUILIBRIUM";
+
+            // Socotra Arid Landscape Sky Grading
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentPhase === 'SCORCHING_HEAT' || currentPhase === 'SIROCCO_STORM') {
+                skyGrad.addColorStop(0, '#220b08'); skyGrad.addColorStop(0.7, '#110403'); skyGrad.addColorStop(1, '#050101'); // Incinerated red clay sky tint
+            } else if (currentPhase === 'DESERT_MIST') {
+                skyGrad.addColorStop(0, '#0c171a'); skyGrad.addColorStop(0.7, '#05090b'); skyGrad.addColorStop(1, '#010203'); // Heavy damp coastal fog
+            } else {
+                skyGrad.addColorStop(0, '#060a0f'); skyGrad.addColorStop(1, '#010204');
+            }
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER STOUT INTERTWINED ARMORED BRANCH SECTIONS
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                // Dragon's blood bark texture is scaled, grey-brown, and highly compartmentalized
+                const tone = Math.max(15, 52 - b.depth * 5);
+                ctx.strokeStyle = `rgb(${tone + 3}, ${tone}, ${tone - 2})`;
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.sx, b.sy);
+                ctx.lineTo(b.ex, b.ey);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 2. RUN TERRAIN SHIELD SPIKE ROSETTES
+            activeLeaves.forEach(spike => {
+                spike.drawNode(wind);
+            });
+
+            // 3. EXECUTE PROCEDURAL CINNABAR RESIN BLEED ENGINE
+            bloodDroplets.forEach(drop => {
+                // Trigger randomized structural bleeding based on microclimate stress index
+                if (!drop.isBleeding && Math.random() < bleedChance) {
+                    drop.isBleeding = true;
+                    drop.activeY = drop.cy;
+                    drop.vy = 0.4 + Math.random() * 0.8;
+                }
+
+                if (drop.isBleeding) {
+                    drop.activeY += drop.vy;
+                    drop.vy += 0.04; // Gravity acceleration drop
+
+                    // Lateral wind draft displacement
+                    const driftX = Math.sin(drop.activeY * 0.02) * (wind * 0.8);
+
+                    ctx.save();
+                    ctx.fillStyle = drop.color;
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = '#ef4444';
+                    ctx.beginPath();
+                    // Viscous tear/droplet shape
+                    ctx.ellipse(drop.cx + driftX, drop.activeY, 2, 3.5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Collision bounds checking against the rocky limestone floor line
+                    const floorLine = 630 + Math.sin(drop.cx * 0.005) * 10;
+                    if (drop.activeY >= floorLine) {
+                        drop.isBleeding = false; // Absorb into desert floor crust
+                    }
+                }
+            });
+
+            // 4. DRAW CRAGGY ARID SOCOTRA LANDSCAPE FLOOR
+            ctx.fillStyle = '#060303';
+            ctx.beginPath();
+            ctx.moveTo(0, 760);
+            for (let x = 0; x <= 1000; x += 20) {
+                ctx.lineTo(x, 630 + Math.sin(x * 0.005) * 10);
+            }
+            ctx.lineTo(1000, 760);
+            ctx.fill();
+
+            requestAnimationFrame(engine);
+        }
+
+        engine();
+    </script>
+</body>
+</html>
