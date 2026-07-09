@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ancient Bristlecone Pine (Pinus longaeva) - 4800 Year Chronology</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #010204;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            box-shadow: 0 0 70px rgba(245, 158, 11, 0.15);
+            border: 1px solid #1c1917;
+            border-radius: 12px;
+        }
+        #chronology-panel {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #d6d3d1;
+            background: rgba(12, 10, 9, 0.92);
+            padding: 22px;
+            border-radius: 10px;
+            border: 1px solid #44403c;
+            pointer-events: none;
+            font-size: 11px;
+            line-height: 1.8;
+            letter-spacing: 1px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+        }
+        .matrix-title { color: #78716c; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
+        .highlight { color: #f59e0b; font-weight: bold; }
+        .ancient-alert { color: #f43f5e; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    </style>
+</head>
+<body>
+
+    <div id="chronology-panel">
+        <div class="matrix-title">Organism Registry</div>
+        SPECIES: <span style="color:#e7e5e4; font-style: italic;">Pinus longaeva</span><br>
+        ESTIMATED AGE: <span class="ancient-alert">4,858 Years (Methuselah)</span><br>
+        SURVIVAL STRATEGY: <span class="highlight">Strip Growth / Sectorial Cambium</span><br>
+        RESIN EXUDATE FLOW: <span id="resin-indicator" style="color:#fbbf24">Stable</span><br>
+        DOLOMITE SOIL ARIDITY: <span style="color:#38bdf8">Extreme (High Altitude)</span>
+    </div>
+
+    <canvas id="bristleconeCanvas" width="1050" height="780"></canvas>
+
+    <script>
+        const canvas = document.getElementById('bristleconeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // High Altitude Mountain Microclimate Cycles
+        const ERAS = ['ALPINE_FREEZE', 'XERIC_SUMMER', 'GLACIAL_BLIZZARD', 'SHORT_SPRING'];
+        let eraIdx = 1;
+        let eraTimer = 0;
+        const ERA_DURATION = 450;
+
+        let wind = 0.4;
+        let targetWind = 0.4;
+        let timeline = 0;
+
+        // Specialized Color Matrix
+        const NEEDLE_CYN = ['#1c3a27', '#224930', '#142c1e', '#2e5b3e']; // Dark resinous waxy green
+        const BARK_DEAD = ['#a8a29e', '#78716c', '#e7e5e4', '#d6d3d1']; // Eroded bare white/grey dead wood
+        const BARK_LIVE = ['#7c2d12', '#9a3412', '#451a03']; // Cinnamon-red vital narrow strip
+
+        const trunkSlices = [];
+        const twistedBranches = [];
+        const bottlebrushWhorls = [];
+        const resinDrops = [];
+
+        // 1. GNARLED TWISTED STRIP-GROWTH STRUCTURE GENERATOR
+        function designAncientTrunk() {
+            let cx = 525;
+            let cy = 660;
+            let trunkHeight = 280;
+            let currentWidth = 45;
+
+            // Generate procedural sliced coordinates with twisted sin offsets
+            for (let y = cy; y > cy - trunkHeight; y -= 8) {
+                const heightRatio = (cy - y) / trunkHeight;
+                // Complex spiral twist distortion using multi-frequency sin waves
+                const twistOffset = Math.sin(heightRatio * 8 + timeline) * 14 + Math.cos(heightRatio * 4) * 8;
+                
+                trunkSlices.push({
+                    x: cx + twistOffset,
+                    y: y,
+                    w: currentWidth * (1 - heightRatio * 0.4)
+                });
+                currentWidth *= 0.985;
+            }
+
+            // Emit tortuous branches from the topmost section of the twisted map
+            const peakSegment = trunkSlices[trunkSlices.length - 1];
+            growGnarledLimb(peakSegment.x, peakSegment.y, 90, -Math.PI/2 - 0.5, 5, 10);
+            growGnarledLimb(peakSegment.x, peakSegment.y, 80, -Math.PI/2 + 0.6, 4, 8);
+        }
+
+        function growGnarledLimb(sx, sy, len, angle, depth, width) {
+            // Apply sharp, angular variations to model ancient weathered paths
+            const randomKink = (Math.random() - 0.5) * 0.4;
+            const ex = sx + Math.cos(angle + randomKink) * len;
+            const ey = sy + Math.sin(angle + randomKink) * len;
+
+            twistedBranches.push({ sx, sy, ex, ey, width, depth });
+
+            if (depth === 0) return;
+
+            const branchSplit = 2;
+            for(let i=0; i<branchSplit; i++) {
+                // Highly erratic and crooking angles pointing outwards
+                const nextAngle = angle + (i - (branchSplit - 1)/2) * 0.7 + (Math.random() - 0.5) * 0.3;
+                const nextLen = len * (0.68 + Math.random() * 0.1);
+                growGnarledLimb(ex, ey, nextLen, nextAngle, depth - 1, width * 0.65);
+            }
+
+            // Bind heavy bottlebrush cluster coordinates on end nodes
+            if (depth <= 2) {
+                bottlebrushWhorls.push({ cx: ex, cy: ey, baseAngle: angle, len: 45 });
+            }
+
+            // Exude amber protective resin points along structural joints
+            if (width > 3 && Math.random() < 0.25) {
+                resinDrops.push({ rx: sx + (ex - sx)*0.3, ry: sy + (ey - sy)*0.3, radius: 1 + Math.random()*2, glowPhase: Math.random()*10 });
+            }
+        }
+
+        designAncientTrunk();
+
+        // 2. CYLINDRICAL BOTTLEBRUSH NEEDLE MATRIX CLUSTERS
+        class BottlebrushNeedle {
+            constructor(whorlData) {
+                this.whorl = whorlData;
+                // Spread needles randomly in a cylindrical envelope along the twig vector
+                this.distRatio = Math.random();
+                this.radialAngle = Math.random() * Math.PI * 2;
+                this.needleLength = 12 + Math.random() * 8;
+
+                this.color = NEEDLE_CYN[Math.floor(Math.random() * NEEDLE_CYN.length)];
+                this.vibratePhase = Math.random() * Math.PI;
+                this.vibrateSpeed = 0.04 + Math.random() * 0.04;
+            }
+
+            renderNode(windForce) {
+                this.vibratePhase += this.vibrateSpeed;
+
+                // Interpolate exact positioning along the parent twig trajectory
+                const itemX = this.whorl.cx - Math.cos(this.whorl.baseAngle) * (this.whorl.len * this.distRatio);
+                const itemY = this.whorl.cy - Math.sin(this.whorl.baseAngle) * (this.whorl.len * this.distRatio);
+
+                // Add wind deflection stress mapping
+                const finalAngle = this.radialAngle + Math.sin(this.vibratePhase) * (windForce * 0.05);
+
+                ctx.save();
+                ctx.translate(itemX, itemY);
+                ctx.rotate(finalAngle);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 0.95;
+
+                // Render highly packed individual short pine needles outward
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, this.needleLength);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        const activeNeedleArray = [];
+        bottlebrushWhorls.forEach(w => {
+            const highDensityCount = 45; // Packed clusters characteristic of Bristlecones
+            for(let k=0; k<highDensityCount; k++) {
+                activeNeedleArray.push(new BottlebrushNeedle(w));
+            }
+        });
+
+        // 3. REAL-TIME ENGINE PIPELINE
+        function executeChronology() {
+            eraTimer++;
+            timeline += 0.015;
+
+            if (eraTimer > ERA_DURATION) {
+                eraTimer = 0;
+                eraIdx = (eraIdx + 1) % ERAS.length;
+            }
+
+            const currentEra = ERAS[eraIdx];
+
+            // Environmental Huts Controls & Adjustments
+            let HUD_label = "";
+            if (currentEra === 'XERIC_SUMMER') {
+                HUD_label = "XERIC ARID SUMMER STRESS";
+                targetWind = 0.4 + Math.sin(timeline) * 0.2;
+            } else if (currentEra === 'ALPINE_FREEZE') {
+                HUD_label = "SUB-ZERO KATABATIC FALLS";
+                targetWind = 1.4 + Math.sin(timeline * 2) * 0.5;
+            } else if (currentEra === 'GLACIAL_BLIZZARD') {
+                HUD_label = "SIERRA BLIZZARD INDUCTION";
+                targetWind = 2.8 + Math.sin(eraTimer * 0.04) * 1.3; // Extreme relentless mountain gales
+            } else if (currentEra === 'SHORT_SPRING') {
+                HUD_label = "METABOLIC SPRING SPIKE";
+                targetWind = 0.3;
+            }
+
+            wind += (targetWind - wind) * 0.03;
+            document.getElementById('season-state').innerText = HUD_label;
+            document.getElementById('resin-indicator').innerText = (currentEra === 'XERIC_SUMMER') ? "Viscous (Active Protection)" : "Crystallized Solid";
+
+            // High Altitude Cosmic Sky Lighting profiles
+            let skyLayer = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentEra === 'XERIC_SUMMER' || currentEra === 'SHORT_SPRING') {
+                skyLayer.addColorStop(0, '#020714'); skyLayer.addColorStop(0.6, '#060a0f'); skyLayer.addColorStop(1, '#0b0c0a'); // Thin oxygen cosmic deep blue
+            } else {
+                skyLayer.addColorStop(0, '#000002'); skyLayer.addColorStop(1, '#090a0f');
+            }
+            ctx.fillStyle = skyLayer;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER TWISTED STRIP-GROWTH MONOLITHIC TRUNK
+            // Renders alternating blocks of bleached dead wood and the single narrow ribbon of living bark
+            for (let i = 0; i < trunkSlices.length - 1; i++) {
+                const s1 = trunkSlices[i];
+                const s2 = trunkSlices[i + 1];
+
+                ctx.save();
+                // Part A: Bleached Dead Cambium Wood Core (Takes up 75% of diameter space)
+                let deadWoodGrad = ctx.createLinearGradient(s1.x - s1.w/2, 0, s1.x + s1.w/2, 0);
+                deadWoodGrad.addColorStop(0, '#44403c'); deadWoodGrad.addColorStop(0.4, '#a8a29e'); deadWoodGrad.addColorStop(0.8, '#d6d3d1'); deadWoodGrad.addColorStop(1, '#57534e');
+                ctx.fillStyle = deadWoodGrad;
+
+                ctx.beginPath();
+                ctx.moveTo(s1.x - s1.w / 2, s1.y);
+                ctx.lineTo(s1.x + s1.w * 0.25, s1.y);
+                ctx.lineTo(s2.x + s2.w * 0.25, s2.y);
+                ctx.lineTo(s2.x - s2.w / 2, s2.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Part B: The Living Cinnamon-Bark Strip Ribbon (The narrow lifeline channel)
+                let liveStripGrad = ctx.createLinearGradient(s1.x + s1.w*0.25, 0, s1.x + s1.w/2, 0);
+                liveStripGrad.addColorStop(0, '#451a03'); liveStripGrad.addColorStop(0.5, '#9a3412'); liveStripGrad.addColorStop(1, '#2d0f02');
+                ctx.fillStyle = liveStripGrad;
+
+                ctx.beginPath();
+                ctx.moveTo(s1.x + s1.w * 0.25, s1.y);
+                ctx.lineTo(s1.x + s1.w / 2, s1.y);
+                ctx.lineTo(s2.x + s2.w / 2, s2.y);
+                ctx.lineTo(s2.x + s2.w * 0.25, s2.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. RENDER ERATIC WEATHERED BRANCH NETWORK
+            twistedBranches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'square';
+                // Branches higher up are mostly stripped dead logs
+                if (b.depth <= 2 && Math.random() < 0.4) {
+                    ctx.strokeStyle = '#a8a29e'; // Weathered bare bone white look
+                } else {
+                    ctx.strokeStyle = '#574238';
+                }
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.sx, b.sy);
+                ctx.lineTo(b.ex, b.ey);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 3. EXECUTE BOTTLEBRUSH CYLINDRICAL NEEDLES
+            activeNeedleArray.forEach(needle => {
+                needle.renderNode(wind);
+            });
+
+            // 4. RENDER GLOWING AMBER RESIN EXUDATE EXTRUSIONS
+            resinDrops.forEach(drop => {
+                drop.glowPhase += 0.05;
+                const dynamicAlpha = 0.4 + Math.sin(drop.glowPhase) * 0.3;
+
+                ctx.save();
+                ctx.globalAlpha = dynamicAlpha;
+                ctx.fillStyle = '#f59e0b';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#fbbf24';
+                ctx.beginPath();
+                ctx.arc(drop.rx, drop.ry, drop.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 5. DRAW HIGH ALTITUDE ARID DOLOMITE CHALK ROCK LAYER
+            ctx.fillStyle = '#0c0a09';
+            ctx.beginPath();
+            ctx.moveTo(0, 780);
+            for (let x = 0; x <= 1050; x += 30) {
+                // Highly craggy fractured mountain layout
+                ctx.lineTo(x, 660 + Math.sin(x * 0.005) * 20 + (x % 40 === 0 ? 8 : -4));
+            }
+            ctx.lineTo(1050, 780);
+            ctx.fill();
+
+            requestAnimationFrame(executeChronology);
+        }
+
+        executeChronology();
+    </script>
+</body>
+</html>
