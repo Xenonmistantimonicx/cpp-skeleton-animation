@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Oak Tree Seasonal Cycle</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #05070a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            border: 1px solid #1a233a;
+        }
+        #dashboard {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #7a8ba3;
+            font-size: 14px;
+            line-height: 1.6;
+            pointer-events: none;
+            background: rgba(10, 15, 26, 0.8);
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #1e293b;
+        }
+        .highlight { color: #e2e8f0; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="dashboard">
+        SYSTEM: <span id="season-txt" class="highlight">SPRING SETUP</span><br>
+        WIND SPEED: <span id="wind-txt" class="highlight">0.0 m/s</span><br>
+        CANOPY COUNT: <span id="count-txt" class="highlight">0</span>
+    </div>
+    
+    <canvas id="oakCanvas" width="1000" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('oakCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Simulating 4 global phases
+        const SEASONS = {
+            SUMMER: 0,
+            AUTUMN: 1,
+            WINTER: 2,
+            SPRING: 3
+        };
+
+        let currentSeason = SEASONS.SUMMER;
+        let seasonTimer = 0;
+        const SEASON_DURATION = 400; // Frames per season
+
+        let globalWind = 0.5;
+        let targetWind = 0.5;
+
+        // Color profiles matching an ancient Oak
+        const OAK_SUMMER = ['#1e3f20', '#2d5a27', '#3a6629', '#1b4d3e'];
+        const OAK_AUTUMN = ['#b85c14', '#a04000', '#d35400', '#8e44ad', '#ca6f1e'];
+
+        const branches = [];
+        const leaves = [];
+        const groundDrifts = [];
+
+        // 1. GNARLY OAK PROCEDURAL GENERATOR
+        function buildOak(startX, startY, length, angle, depth, branchWidth) {
+            // Oak branch angle variance to create classic "crooked" oak texture
+            const gnarledFactor = (Math.random() - 0.5) * 0.25;
+            const endX = startX + Math.cos(angle + gnarledFactor) * length;
+            const endY = startY + Math.sin(angle + gnarledFactor) * length;
+
+            branches.push({ startX, startY, endX, endY, branchWidth, depth });
+
+            if (depth === 0) return;
+
+            // Oaks have wide spreads; reduce length slowly but split broadly
+            const nextLength = length * (0.75 + Math.random() * 0.1);
+            const nextWidth = branchWidth * 0.72;
+
+            // Left branch (wide angle)
+            buildOak(endX, endY, nextLength, angle - 0.45 - Math.random() * 0.2, depth - 1, nextWidth);
+            // Right branch (wide angle)
+            buildOak(endX, endY, nextLength, angle + 0.45 + Math.random() * 0.2, depth - 1, nextWidth);
+            
+            // Central erratic shoots characteristic of massive oak limbs
+            if (depth > 3 && Math.random() > 0.4) {
+                buildOak(endX, endY, length * 0.5, angle + (Math.random() - 0.5) * 0.3, depth - 1, nextWidth * 0.8);
+            }
+        }
+
+        // Initialize tree architecture (Deep recursion for heavy details)
+        buildOak(500, 640, 140, -Math.PI / 2, 9, 22);
+
+        // 2. LEAF ENGINE WITH ADVANCED PHYSICS
+        class OakLeaf {
+            constructor(parentBranch) {
+                // Pin leaves toward the dense outer tip branches 
+                this.originX = parentBranch.endX + (Math.random() - 0.5) * 35;
+                this.originY = parentBranch.endY + (Math.random() - 0.5) * 35;
+                this.x = this.originX;
+                this.y = this.originY;
+                
+                this.baseSize = 5 + Math.random() * 6;
+                this.size = this.baseSize;
+                this.angle = Math.random() * Math.PI * 2;
+                
+                this.summerColor = OAK_SUMMER[Math.floor(Math.random() * OAK_SUMMER.length)];
+                this.autumnColor = OAK_AUTUMN[Math.floor(Math.random() * OAK_AUTUMN.length)];
+                this.currentColor = this.summerColor;
+                this.colorWeight = 0;
+
+                // Physics metrics
+                this.isAttached = true;
+                this.vx = 0;
+                this.vy = 0;
+                this.swaySpeed = 0.04 + Math.random() * 0.06;
+                this.swayTime = Math.random() * 100;
+                this.rotSpeed = (Math.random() - 0.5) * 0.1;
+            }
+
+            update() {
+                this.swayTime += this.swaySpeed;
+
+                if (this.isAttached) {
+                    // Subtle wind rustling while still on tree
+                    this.x = this.originX + Math.sin(this.swayTime) * (globalWind * 2);
+                    this.y = this.originY + Math.cos(this.swayTime) * (globalWind * 0.5);
+
+                    // Season state machine handling transitions
+                    if (currentSeason === SEASONS.SUMMER) {
+                        this.currentColor = this.summerColor;
+                        this.size = this.baseSize;
+                    } 
+                    else if (currentSeason === SEASONS.AUTUMN) {
+                        // Dynamic individual color change rates
+                        if (this.colorWeight < 1) this.colorWeight += 0.003 + (Math.random() * 0.002);
+                        this.currentColor = lerpRGB(this.summerColor, this.autumnColor, this.colorWeight);
+
+                        // Leaves loosen over time based on autumn storm thresholds
+                        let detachmentChance = 0.0005 * (seasonTimer / 10) * globalWind;
+                        if (Math.random() < detachmentChance) {
+                            this.detach();
+                        }
+                    } 
+                    else if (currentSeason === SEASONS.WINTER) {
+                        // Freezing winter conditions shed remaining canopy immediately
+                        if (Math.random() < 0.05) this.detach();
+                    } 
+                    else if (currentSeason === SEASONS.SPRING) {
+                        // Gradually bud out from zero size
+                        this.currentColor = this.summerColor;
+                        this.colorWeight = 0;
+                        this.x = this.originX;
+                        this.y = this.originY;
+                        let growthTimeline = seasonTimer / SEASON_DURATION;
+                        this.size = Math.max(0, this.baseSize * Math.min(1, growthTimeline * 1.5));
+                    }
+                } else {
+                    // FALLING LEAF FLUID SIMULATION
+                    this.vy += 0.04; // Gravity
+                    this.vx += (globalWind * 0.1) + Math.sin(this.swayTime) * 0.3; // Wind drift + aerodynamic flutter
+                    
+                    // Cap terminal velocities
+                    this.vx *= 0.98;
+                    this.vy *= 0.96;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.angle += this.rotSpeed + (this.vx * 0.02);
+
+                    // Dynamic ground collision mapping the curved hill landscape
+                    let groundY = 640 + Math.sin((this.x - 500) * 0.003) * 30;
+                    if (this.y >= groundY + (Math.random() * 8 - 4)) {
+                        // Cache position to ground render array to avoid processing overhead
+                        groundDrifts.push({
+                            x: this.x,
+                            y: this.y,
+                            size: this.size,
+                            angle: this.angle,
+                            color: this.currentColor,
+                            opacity: 1
+                        });
+                        // Reset properties silently for next rebirth sequence
+                        this.isAttached = true;
+                        this.size = 0; 
+                    }
+                }
+            }
+
+            detach() {
+                this.isAttached = false;
+                this.vy = Math.random() * 0.5;
+                this.vx = globalWind * 2 + (Math.random() - 0.5) * 1;
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+                
+                // Advanced multi-lobed Oak Leaf geometry path simulation
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size);
+                ctx.quadraticCurveTo(this.size * 0.6, -this.size * 0.5, this.size * 0.3, -this.size * 0.2);
+                ctx.quadraticCurveTo(this.size * 0.9, 0, this.size * 0.4, this.size * 0.3);
+                ctx.quadraticCurveTo(this.size * 0.5, this.size, 0, this.size * 0.8);
+                ctx.quadraticCurveTo(-this.size * 0.5, this.size, -this.size * 0.4, this.size * 0.3);
+                ctx.quadraticCurveTo(-this.size * 0.9, 0, -this.size * 0.3, -this.size * 0.2);
+                ctx.quadraticCurveTo(-this.size * 0.6, -this.size * 0.5, 0, -this.size);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Initialize leaves exclusively on the fine twig layers
+        branches.forEach(b => {
+            if (b.branchWidth < 5) {
+                let concentration = Math.floor(6 + Math.random() * 8);
+                for(let i=0; i < concentration; i++) {
+                    leaves.push(new OakLeaf(b));
+                }
+            }
+        });
+
+        // Color blending helper 
+        function lerpRGB(hex1, hex2, w) {
+            let c1 = parseInt(hex1.slice(1), 16), c2 = parseInt(hex2.slice(1), 16);
+            let r = Math.round(((c1 >> 16) & 255) * (1 - w) + ((c2 >> 16) & 255) * w);
+            let g = Math.round(((c1 >> 8) & 255) * (1 - w) + ((c2 >> 8) & 255) * w);
+            let b = Math.round((c1 & 255) * (1 - w) + (c2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. MASTER ANIMATION COORDINATOR
+        function loop() {
+            // Environment Rendering
+            ctx.fillStyle = '#0a0f1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            seasonTimer++;
+
+            // Manage Global Seasonal Transitions
+            if (seasonTimer > SEASON_DURATION) {
+                seasonTimer = 0;
+                currentSeason = (currentSeason + 1) % 4;
+            }
+
+            // Procedural Environment & Atmospheric Controls
+            let statusText = "";
+            if (currentSeason === SEASONS.SUMMER) {
+                statusText = "SUMMER MATURITY";
+                targetWind = 0.4 + Math.sin(Date.now() * 0.001) * 0.3; 
+            } else if (currentSeason === SEASONS.AUTUMN) {
+                statusText = "AUTUMN EQUINOX SHEDDING";
+                // High winds spike up late in autumn to accelerate shedding
+                targetWind = 2.2 + Math.sin(seasonTimer * 0.05) * 1.5; 
+            } else if (currentSeason === SEASONS.WINTER) {
+                statusText = "WINTER DORMANCY";
+                targetWind = 0.8;
+            } else if (currentSeason === SEASONS.SPRING) {
+                statusText = "SPRING REGENESIS";
+                targetWind = 0.3;
+                // Deconstruct ground foliage buffer gradually as spring resets
+                if (groundDrifts.length > 0) groundDrifts.splice(0, 3);
+            }
+
+            // Smooth out wind velocity step tracking
+            globalWind += (targetWind - globalWind) * 0.05;
+
+            // Update UI Panel
+            document.getElementById('season-txt').innerText = statusText;
+            document.getElementById('wind-txt').innerText = `${(globalWind * 4).toFixed(1)} m/s`;
+            let activeCanopy = leaves.filter(l => l.isAttached && l.size > 0).length;
+            document.getElementById('count-txt').innerText = activeCanopy;
+
+            // Draw Sky Ambient Glow
+            let skyGlow = ctx.createRadialGradient(500, 400, 50, 500, 400, 600);
+            skyGlow.addColorStop(0, 'rgba(30, 41, 59, 0.2)');
+            skyGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = skyGlow;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+
+            // Draw Heavy Wooden Branch Architecture
+            ctx.lineCap = 'round';
+            branches.forEach(b => {
+                // Adjust deep trunk color shade depending on depth layer
+                ctx.strokeStyle = `rgb(${45 - b.depth * 2}, ${28 - b.depth}, 18)`;
+                ctx.lineWidth = b.branchWidth;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+            });
+
+            // Update & Render Canopy System
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // Handle Layered Ground Foliage Accumulation
+            for (let i = groundDrifts.length - 1; i >= 0; i--) {
+                let drift = groundDrifts[i];
+                
+                // Rot leaves away completely toward the end of Winter freeze
+                if (currentSeason === SEASONS.WINTER && seasonTimer > SEASON_DURATION * 0.4) {
+                    drift.opacity -= 0.005;
+                }
+                if (drift.opacity <= 0) {
+                    groundDrifts.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = drift.opacity;
+                ctx.translate(drift.x, drift.y);
+                ctx.rotate(drift.angle);
+                ctx.fillStyle = drift.color;
+                ctx.beginPath();
+                // Flat shape profiles representing squashed fallen crisp leaves
+                ctx.ellipse(0, 0, drift.size, drift.size * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Draw Earth Bed (Hill landscape)
+            ctx.fillStyle = '#080c14';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for(let x=0; x<=1000; x+=20) {
+                let y = 640 + Math.sin((x - 500) * 0.003) * 30;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(1000, 750);
+            ctx.fill();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Trigger Loop
+        loop();
+    </script>
+</body>
+</html>
