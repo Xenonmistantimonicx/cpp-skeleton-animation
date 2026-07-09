@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Sacred Banyan Tree (Vatavriksha) Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #040608;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(34, 197, 94, 0.15);
+            border: 1px solid #111827;
+            border-radius: 8px;
+        }
+        #banyan-hud {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #9ca3af;
+            background: rgba(9, 13, 22, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            pointer-events: none;
+            font-size: 12px;
+            font-family: monospace;
+            line-height: 1.7;
+        }
+        .highlight { color: #10b981; font-weight: bold; }
+        .prop-root-alert { color: #f59e0b; }
+    </style>
+</head>
+<body>
+
+    <div id="banyan-hud">
+        SPECIES: <span style="color:#e11d48; font-weight:bold;">Ficus benghalensis</span><br>
+        CANOPY WIDTH: <span class="highlight">Horizontal Spread Matrix</span><br>
+        ECO-CYCLE: <span id="cycle-state" class="highlight">MONSOON LUSH</span><br>
+        AERIAL PROP ROOTS: <span id="root-count" class="prop-root-alert">0 Active</span>
+    </div>
+
+    <canvas id="banyanCanvas" width="1050" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('banyanCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Banyan Specific Semi-Evergreen Phases
+        const CYCLES = ['MONSOON_LUSH', 'POST_MONSOON_COOL', 'WINTER_SHED_FAST', 'SPRING_FLUSH_PINK'];
+        let cycleIdx = 0;
+        let cycleTimer = 0;
+        const CYCLE_DURATION = 400;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+        let timeline = 0;
+
+        // Banyan Leathery Glossy Green & Coppery-Pink Bud Palettes
+        const BANYAN_GREEN = ['#0f3a20', '#14532d', '#166534', '#064e3b'];
+        const BANYAN_PINK_BUDS = ['#fda4af', '#f43f5e', '#be123c', '#fb7185']; // New leaves are coppery-pink
+        const BANYAN_SHED = ['#854d0e', '#a16207', '#713f12']; // Late winter old yellow-brown leaves
+
+        const branches = [];
+        const aerialRoots = [];
+        const leaves = [];
+        const fallenLitter = [];
+
+        // 1. HORIZONTAL WIDE-SPREAD BANYAN MATRIX GENERATOR
+        function growBanyan(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                startX: x, startY: y,
+                endX: endX, endY: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Banyan branches push outward horizontally rather than straight up
+            const splitCount = depth > 6 ? 3 : 2;
+            for(let i = 0; i < splitCount; i++) {
+                // Adjusting angles to favor flat horizontal growth extensions
+                let angleOffset = (i - (splitCount - 1) / 2) * 0.6;
+                if (Math.abs(angle) < 0.5 || Math.abs(angle - Math.PI) < 0.5) {
+                    angleOffset *= 0.7; // Keep extending flatly
+                }
+                
+                const nextAngle = angle + angleOffset + (Math.random() - 0.5) * 0.15;
+                const nextLength = length * (0.75 + Math.random() * 0.1);
+                const nextWidth = width * 0.7;
+
+                growBanyan(endX, endY, nextLength, nextAngle, depth - 1, nextWidth);
+            }
+
+            // Generate roots drop points from main heavy horizontal branches
+            if (depth <= 6 && depth >= 3 && Math.random() < 0.12) {
+                aerialRoots.push({
+                    originX: endX, originY: endY,
+                    currentY: endY,
+                    targetY: 630 + Math.sin(endX * 0.003) * 15,
+                    isGrounded: false,
+                    rootWidth: 1 + Math.random() * 1.5
+                });
+            }
+        }
+
+        // Initialize Base Giant Trunk & Wide Canopy Split
+        growBanyan(525, 630, 115, -Math.PI / 2, 8, 28);
+
+        // 2. SEMI-EVERGREEN LEAF CONTEXT
+        class BanyanLeaf {
+            constructor(parentTwig) {
+                this.anchorX = parentTwig.endX + (Math.random() - 0.5) * 45;
+                this.anchorY = parentTwig.endY + (Math.random() - 0.5) * 45;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.baseSize = 6 + Math.random() * 5;
+                this.size = this.baseSize;
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.greenColor = BANYAN_GREEN[Math.floor(Math.random() * BANYAN_GREEN.length)];
+                this.pinkColor = BANYAN_PINK_BUDS[Math.floor(Math.random() * BANYAN_PINK_BUDS.length)];
+                this.shedColor = BANYAN_SHED[Math.floor(Math.random() * BANYAN_SHED.length)];
+                
+                this.currentColor = this.greenColor;
+                this.stateProgress = 0;
+
+                this.attached = true;
+                this.vx = 0; this.vy = 0;
+                this.swaySpeed = 0.03 + Math.random() * 0.04;
+                this.phase = Math.random() * 50;
+            }
+
+            update() {
+                this.phase += this.swaySpeed;
+                const currentCycle = CYCLES[cycleIdx];
+
+                if (this.attached) {
+                    // Heavy glossy leaf minimal waving
+                    this.x = this.anchorX + Math.sin(this.phase) * (wind * 2);
+                    this.y = this.anchorY + Math.cos(this.phase) * 0.5;
+
+                    if (currentCycle === 'MONSOON_LUSH') {
+                        this.currentColor = this.greenColor;
+                        this.size = this.baseSize;
+                        this.stateProgress = 0;
+                    } 
+                    else if (currentCycle === 'WINTER_SHED_FAST') {
+                        // Rapid selective shedding of old leaves
+                        if (this.stateProgress < 1) this.stateProgress += 0.01;
+                        this.currentColor = lerpHex(this.greenColor, this.shedColor, this.stateProgress);
+
+                        if (Math.random() < 0.003 * (cycleTimer / 5) * wind) {
+                            this.attached = false;
+                        }
+                    } 
+                    else if (currentCycle === 'SPRING_FLUSH_PINK') {
+                        this.attached = true;
+                        // Turn coppery pink first, then slowly scale up
+                        if (this.stateProgress < 1) this.stateProgress += 0.005;
+                        this.currentColor = lerpHex(this.pinkColor, this.greenColor, this.stateProgress);
+                        
+                        const growthFactor = Math.min(1, (cycleTimer / CYCLE_DURATION) * 2);
+                        this.size = this.baseSize * growthFactor;
+                    }
+                    else if (currentCycle === 'POST_MONSOON_COOL') {
+                        this.currentColor = this.greenColor;
+                        this.size = this.baseSize;
+                        this.stateProgress = 0;
+                    }
+                } else {
+                    // HEAVY LEAF FALL PHYSICS
+                    this.vy += 0.04; 
+                    this.vx += (wind * 0.1) + Math.sin(this.phase) * 0.3;
+                    this.vx *= 0.96; this.vy *= 0.95;
+
+                    this.x += this.vx; this.y += this.vy;
+                    this.angle += 0.04;
+
+                    const groundY = 630 + Math.sin(this.x * 0.003) * 15;
+                    if (this.y >= groundY) {
+                        fallenLitter.push({
+                            x: this.x, y: groundY, size: this.size, color: this.currentColor, alpha: 0.8
+                        });
+                        this.attached = true;
+                        this.size = 0; // Prepare for spring sprout loop
+                    }
+                }
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+                
+                // Thick elliptical Banyan leaf shape
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.size, this.size * 0.65, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        const leafInstances = leaves.map(l => l); // optimized mirror array
+        branches.forEach(b => {
+            if (b.depth <= 4) {
+                const count = Math.floor(7 + Math.random() * 9);
+                for (let i = 0; i < count; i++) leaves.push(new BanyanLeaf(b));
+            }
+        });
+
+        function lerpHex(h1, h2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(h1), rgb2 = parse(h2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. RUNTIME PIPELINE
+        function execute() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            cycleTimer++;
+            timeline += 0.02;
+
+            if (cycleTimer > CYCLE_DURATION) {
+                cycleTimer = 0;
+                cycleIdx = (cycleIdx + 1) % CYCLES.length;
+            }
+
+            const currentCycle = CYCLES[cycleIdx];
+
+            // Setup Ambient Background Atmosphere depending on Indian seasons
+            let skyGlow = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentCycle === 'MONSOON_LUSH') {
+                skyGlow.addColorStop(0, '#030d08'); skyGlow.addColorStop(1, '#020503');
+                targetWind = 0.6 + Math.sin(timeline) * 0.3;
+            } else if (currentCycle === 'WINTER_SHED_FAST') {
+                skyGlow.addColorStop(0, '#1c150b'); skyGlow.addColorStop(1, '#050402'); // Dry dusty haze
+                targetWind = 1.5 + Math.sin(timeline * 1.5) * 0.9;
+            } else if (currentCycle === 'SPRING_FLUSH_PINK') {
+                skyGlow.addColorStop(0, '#1e1014'); skyGlow.addColorStop(1, '#040203'); // Soft twilight pinkish hint
+                targetWind = 0.3;
+                if (fallenLitter.length > 0) fallenLitter.splice(0, 2); // Quick loam decay
+            } else {
+                skyGlow.addColorStop(0, '#050912'); skyGlow.addColorStop(1, '#010205');
+                targetWind = 0.2;
+            }
+            ctx.fillStyle = skyGlow;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            wind += (targetWind - wind) * 0.04;
+
+            // Update UI HUD text panel data
+            document.getElementById('cycle-state').innerText = currentCycle.replace(/_/g, ' ');
+            document.getElementById('root-count').innerText = aerialRoots.filter(r => r.isGrounded).length + " Grounded Pillars";
+
+            // 1. RENDER GIANT BRANCH MATRIX STRUCTURE
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                const woodTone = Math.max(12, 45 - b.depth * 3);
+                ctx.strokeStyle = `rgb(${woodTone + 6}, ${woodTone + 4}, ${woodTone})`; // Slate ash grey bark
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 2. UPDATE & DRAW PROP ROOTS (Dynamic Pillar Evolution)
+            aerialRoots.forEach(root => {
+                // Growth mechanics: drop down to ground slowly in wet/monsoon cycles
+                if (!root.isGrounded) {
+                    let growthRate = (currentCycle === 'MONSOON_LUSH') ? 0.6 : 0.15;
+                    root.currentY += growthRate;
+                    if (root.currentY >= root.targetY) {
+                        root.isGrounded = true;
+                    }
+                } else {
+                    // Thickens slowly once grounded to become secondary supporting trunks
+                    if (root.rootWidth < root.originX * 0.03) root.rootWidth += 0.005;
+                }
+
+                ctx.save();
+                if (root.isGrounded) {
+                    // Transforms into stable grey trunk pillar wood look
+                    let trunkGrad = ctx.createLinearGradient(root.originX - root.rootWidth/2, 0, root.originX + root.rootWidth/2, 0);
+                    trunkGrad.addColorStop(0, '#1f2421'); trunkGrad.addColorStop(0.5, '#3a3f3b'); trunkGrad.addColorStop(1, '#111412');
+                    ctx.strokeStyle = trunkGrad;
+                } else {
+                    ctx.strokeStyle = 'rgba(180, 110, 75, 0.6)'; // Soft organic reddish-brown strands in air
+                }
+                ctx.lineWidth = root.rootWidth;
+                ctx.beginPath();
+                ctx.moveTo(root.originX, root.originY);
+                ctx.lineTo(root.originX, root.currentY); // Straight drop alignment
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 3. UPDATE & DRAW LEAVES
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 4. RENDER SACRED LEAF LITTER GROUND MAT
+            for (let i = fallenLitter.length - 1; i >= 0; i--) {
+                let f = fallenLitter[i];
+                if (currentCycle === 'SPRING_FLUSH_PINK') f.alpha -= 0.006;
+                if (f.alpha <= 0) {
+                    fallenLitter.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = f.alpha;
+                ctx.fillStyle = f.color;
+                ctx.translate(f.x, f.y);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, f.size, f.size * 0.5, Math.PI/4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 5. DRAW INDIAN HINDUS LANDSCAPE LAYER
+            ctx.fillStyle = '#020403';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 1050; x += 25) {
+                ctx.lineTo(x, 630 + Math.sin(x * 0.003) * 15);
+            }
+            ctx.lineTo(1050, 750);
+            ctx.fill();
+
+            requestAnimationFrame(execute);
+        }
+
+        execute();
+    </script>
+</body>
+</html>
