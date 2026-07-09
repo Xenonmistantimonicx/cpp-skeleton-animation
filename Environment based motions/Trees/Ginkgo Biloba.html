@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ginkgo Biloba - The 270 Million Year Living Fossil</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #020306;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(234, 179, 8, 0.18);
+            border: 1px solid #111524;
+            border-radius: 10px;
+        }
+        #ginkgo-hud {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #94a3b8;
+            background: rgba(6, 9, 19, 0.93);
+            padding: 22px;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+            pointer-events: none;
+            font-size: 12px;
+            line-height: 1.8;
+            letter-spacing: 0.5px;
+        }
+        .gold-highlight { color: #eab308; font-weight: bold; text-shadow: 0 0 8px rgba(234,179,8,0.4); }
+        .fossil-tag { color: #10b981; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="ginkgo-hud">
+        CHRONOLOGY: <span class="fossil-tag">Permian Era Survivor (Living Fossil)</span><br>
+        TAXONOMY: <span style="color:#f43f5e; font-style:italic;">Ginkgo biloba</span><br>
+        PHENOLOGY PHASE: <span id="ginkgo-phase" class="gold-highlight">SUMMER JADE</span><br>
+        SHEDDING PATTERN: <span id="shed-mechanic" style="color:#38bdf8">Synchronous Cascade</span>
+    </div>
+
+    <canvas id="ginkgoCanvas" width="1020" height="760"></canvas>
+
+    <script>
+        const canvas = document.getElementById('ginkgoCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Ginkgo's highly unique evolutionary timeline loops
+        const SEASONS = ['SUMMER_JADE', 'AUTUMN_CHLOROPHYLL_FADE', 'PEAK_GOLDEN_DROP', 'HIROSHIMA_RESILIENCE_DORMANCY', 'SPRING_REBIRTH'];
+        let seasonIdx = 0;
+        let seasonTimer = 0;
+        const SEASON_DURATION = 400;
+
+        let wind = 0.25;
+        let targetWind = 0.25;
+        let timeline = 0;
+
+        // Custom Color Matrices
+        const GINKGO_JADE = ['#115e59', '#14b8a6', '#0f766e', '#134e4a']; // Rich prehistoric deep greens
+        const GINKGO_GOLD = ['#eab308', '#facc15', '#ca8a04', '#fef08a']; // Brilliant uniform neon gold
+
+        const branches = [];
+        const leaves = [];
+        const goldenCarpet = [];
+
+        // 1. COLUMNAR ASYMMETRIC ANTIQUE BRANCH GENERATOR
+        function growGinkgo(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                sx: x, sy: y, ex: endX, ey: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Ginkgo features erratic, bold, upright structural architecture
+            const branchesCount = depth > 5 ? 2 : (Math.random() < 0.75 ? 3 : 2);
+            for(let i=0; i<branchesCount; i++) {
+                const structuralCorrection = (Math.random() - 0.5) * 0.2;
+                // Strong upward bias mapping (-Math.PI/2) to maintain majestic column look
+                const nextAngle = angle * 0.82 + (i - (branchesCount - 1) / 2) * 0.42 + structuralCorrection;
+                const nextLength = length * (0.74 + Math.random() * 0.08);
+                const nextWidth = width * 0.7;
+
+                growGinkgo(endX, endY, nextLength, nextAngle, depth - 1, nextWidth);
+            }
+        }
+
+        // Initialize: Mighty thick-barked trunk starting from rocky substrate
+        growGinkgo(510, 640, 125, -Math.PI / 2, 8, 24);
+
+        // 2. EVOLUTIONARY FAN-SHAPED BILOBA LEAF OBJECT
+        class GinkgoLeaf {
+            constructor(parentTwig) {
+                this.anchorX = parentTwig.ex + (Math.random() - 0.5) * 45;
+                this.anchorY = parentTwig.ey + (Math.random() - 0.5) * 45;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.baseSize = 8 + Math.random() * 6;
+                this.size = this.baseSize;
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.jadeColor = GINKGO_JADE[Math.floor(Math.random() * GINKGO_JADE.length)];
+                this.goldColor = GINKGO_GOLD[Math.floor(Math.random() * GINKGO_GOLD.length)];
+                this.currentColor = this.jadeColor;
+                this.colorProgress = 0;
+
+                this.attached = true;
+                this.vx = 0; this.vy = 0;
+                this.flutterFreq = 0.06 + Math.random() * 0.06;
+                this.phase = Math.random() * 100;
+                this.tumbleSpeed = (Math.random() - 0.5) * 0.07;
+            }
+
+            update() {
+                this.phase += this.flutterFreq;
+                const currentSeason = SEASONS[seasonIdx];
+
+                if (this.attached) {
+                    // Delicate fan fluttering under wind pressure
+                    this.x = this.anchorX + Math.sin(this.phase) * (wind * 2.2);
+                    this.y = this.anchorY + Math.cos(this.phase) * 0.5;
+
+                    if (currentSeason === 'SUMMER_JADE') {
+                        this.currentColor = this.jadeColor;
+                        this.size = this.baseSize;
+                        this.colorProgress = 0;
+                    } 
+                    else if (currentSeason === 'AUTUMN_CHLOROPHYLL_FADE') {
+                        // Flawless global uniform transition to pure gold
+                        if (this.colorProgress < 1) this.colorProgress += 0.004;
+                        this.currentColor = lerpColorMatrix(this.jadeColor, this.goldColor, this.colorProgress);
+                    } 
+                    else if (currentSeason === 'PEAK_GOLDEN_DROP') {
+                        this.currentColor = this.goldColor;
+                        
+                        // THE SYNCHRONOUS CASCADE: Massive catastrophic release curve
+                        const dropTrigger = 0.002 + (seasonTimer / SEASON_DURATION) * 0.18;
+                        if (Math.random() < dropTrigger * wind) {
+                            this.attached = false;
+                            this.vx = (Math.random() - 0.5) * 2;
+                            this.vy = Math.random() * 1;
+                        }
+                    } 
+                    else if (currentSeason === 'HIROSHIMA_RESILIENCE_DORMANCY') {
+                        this.attached = false; // Ensure complete bald look instantly
+                        this.size = 0;
+                    } 
+                    else if (currentSeason === 'SPRING_REBIRTH') {
+                        this.attached = true;
+                        this.currentColor = this.jadeColor;
+                        this.x = this.anchorX; this.y = this.anchorY;
+                        
+                        // Fast cell expansion budding phase
+                        const springScale = Math.min(1, (seasonTimer / SEASON_DURATION) * 2.2);
+                        this.size = this.baseSize * springScale;
+                    }
+                } else {
+                    // DYNAMIC FLUID FAN-LEAF AERODYNAMICS (Side-to-side gliding sail effect)
+                    this.vy += 0.032; 
+                    this.vx += (wind * 0.08) + Math.sin(this.phase * 0.7) * 0.4;
+                    this.vx *= 0.96; this.vy *= 0.96;
+
+                    this.x += this.vx; this.y += this.vy;
+                    this.angle += this.tumbleSpeed + (this.vx * 0.03);
+
+                    const floorY = 640 + Math.sin(this.x * 0.003) * 15;
+                    if (this.y >= floorY) {
+                        goldenCarpet.push({
+                            x: this.x, y: floorY + (Math.random() * 8 - 4),
+                            size: this.size, angle: this.angle,
+                            color: this.currentColor, alpha: 0.95
+                        });
+                        this.attached = true;
+                        this.size = 0; // Hibernate hidden vector
+                    }
+                }
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+
+                // Precision Mathematical Fan-Shape (Maidenhair split profile)
+                ctx.beginPath();
+                ctx.moveTo(0, 0); // Stem Base origin
+                ctx.quadraticCurveTo(-this.size * 0.6, -this.size * 0.4, -this.size, -this.size * 0.8); // Left fan flare
+                ctx.quadraticCurveTo(-this.size * 0.4, -this.size * 1.1, -this.size * 0.15, -this.size); // Left lobe top scallop
+                ctx.lineTo(0, -this.size * 0.75); // Central Biloba notch split point
+                ctx.lineTo(this.size * 0.15, -this.size);
+                ctx.quadraticCurveTo(this.size * 0.4, -this.size * 1.1, this.size, -this.size * 0.8); // Right lobe top scallop
+                ctx.quadraticCurveTo(this.size * 0.6, -this.size * 0.4, 0, 0); // Right fan flare return
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Generate Canopy Layer Maps
+        branches.forEach(b => {
+            if (b.depth <= 4) {
+                const density = Math.floor(8 + Math.random() * 11);
+                for(let i=0; i<density; i++) leaves.push(new GinkgoLeaf(b));
+            }
+        });
+
+        function lerpColorMatrix(hex1, hex2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(hex1), rgb2 = parse(hex2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. GRAPHICS REFRESH ENGINE PIPELINE
+        function runSimulation() {
+            seasonTimer++;
+            timeline += 0.02;
+
+            if (seasonTimer > SEASON_DURATION) {
+                seasonTimer = 0;
+                seasonIdx = (seasonIdx + 1) % SEASONS.length;
+            }
+
+            const currentSeason = SEASONS[seasonIdx];
+
+            // Setup real-time wind speed modulations and status text blocks
+            let phaseLabel = "", dropLabel = "Synchronous Core Engagement";
+            if (currentSeason === 'SUMMER_JADE') {
+                phaseLabel = "SUMMER JADE CANOPY STABILITY";
+                targetWind = 0.35 + Math.sin(timeline) * 0.15;
+            } else if (currentSeason === 'AUTUMN_CHLOROPHYLL_FADE') {
+                phaseLabel = "GOLDEN XANTHOPHYLL PULSE";
+                targetWind = 0.5;
+            } else if (currentSeason === 'PEAK_GOLDEN_DROP') {
+                phaseLabel = "SYNCHRONOUS GOLDEN SHOWER (SUDDEN DROP)";
+                dropLabel = "CRITICAL MASS SHEARING ACTIVATED";
+                targetWind = 1.8 + Math.sin(timeline * 2) * 0.8; // High autumn shedding gusts
+            } else if (currentSeason === 'HIROSHIMA_RESILIENCE_DORMANCY') {
+                phaseLabel = "RESILIENCE METABOLIC DORMANCY";
+                dropLabel = "Quiescent State (Zero Energy Loss)";
+                targetWind = 0.5;
+            } else if (currentSeason === 'SPRING_REBIRTH') {
+                phaseLabel = "CELLULAR REGENERATION OVERDRIVE";
+                targetWind = 0.25;
+                if (goldenCarpet.length > 0) goldenCarpet.splice(0, 3); // Accelerated organic decay loop
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            document.getElementById('ginkgo-phase').innerText = phaseLabel;
+            document.getElementById('shed-mechanic').innerText = dropLabel;
+
+            // Deep Jurassic Atmospheric Sky Grading Profiles
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentSeason === 'SUMMER_JADE') {
+                sky.addColorStop(0, '#040d12'); sky.addColorStop(1, '#010305');
+            } else if (currentSeason === 'AUTUMN_CHLOROPHYLL_FADE' || currentSeason === 'PEAK_GOLDEN_DROP') {
+                sky.addColorStop(0, '#1a1005'); sky.addColorStop(0.7, '#07050b'); sky.addColorStop(1, '#010103'); // Ambient golden twilight backdrop reflection
+            } else {
+                sky.addColorStop(0, '#03050c'); sky.addColorStop(1, '#000001');
+            }
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER FURROWED RESILIENT SLATE-GREY TRUNK CORE
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                // Distinct deeply-fissured prehistoric ash grey-brown tone
+                const barkShade = Math.max(14, 50 - b.depth * 4);
+                ctx.strokeStyle = `rgb(${barkShade + 6}, ${barkShade + 5}, ${barkShade + 3})`;
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.sx, b.sy);
+                ctx.lineTo(b.ex, b.ey);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 2. RUN CANOPY WAVE PHENOLOGY LEAVES
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 3. RENDER THE ICONIC SOLID GOLD GROUND BLANKET CARPET
+            for (let i = goldenCarpet.length - 1; i >= 0; i--) {
+                let gc = goldenCarpet[i];
+                if (currentSeason === 'HIROSHIMA_RESILIENCE_DORMANCY' && seasonTimer > SEASON_DURATION * 0.6) {
+                    gc.alpha -= 0.005; // Earth absorption conversion sequence
+                }
+                if (gc.alpha <= 0) {
+                    goldenCarpet.splice(i, 1); continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = gc.alpha;
+                ctx.translate(gc.x, gc.y);
+                ctx.rotate(gc.angle);
+                ctx.fillStyle = gc.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, gc.size * 0.7, gc.size * 0.35, 0, 0, Math.PI * 2); // Flattened overlapping golden scales
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 4. DRAW SUBSTRATE BASE LANDSCAPE RIDGE
+            ctx.fillStyle = '#020306';
+            ctx.beginPath();
+            ctx.moveTo(0, 760);
+            for (let x = 0; x <= 1020; x += 20) {
+                ctx.lineTo(x, 640 + Math.sin(x * 0.003) * 15);
+            }
+            ctx.lineTo(1020, 760);
+            ctx.fill();
+
+            requestAnimationFrame(runSimulation);
+        }
+
+        runSimulation();
+    </script>
+</body>
+</html>
