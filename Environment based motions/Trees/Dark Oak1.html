@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Dark Oak Seasonal Lifecycle</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #030508;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', monospace;
+        }
+        #canvasContainer {
+            position: relative;
+            box-shadow: 0 30px 70px rgba(0,0,0,0.9);
+            border: 1px solid #111a2e;
+        }
+        canvas { display: block; background: #040711; }
+        #telemetry {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #4a5d78;
+            font-size: 11px;
+            line-height: 1.7;
+            letter-spacing: 1px;
+            background: rgba(4, 7, 17, 0.85);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #16223f;
+            pointer-events: none;
+        }
+        .val { color: #cbd5e1; font-weight: bold; }
+        .title { font-size: 14px; color: #f87171; margin-bottom: 5px; font-weight: bold; display: block;}
+    </style>
+</head>
+<body>
+
+    <div id="canvasContainer">
+        <div id="telemetry">
+            <span class="title">DARK OAK SIMULATION</span>
+            SEASON: <span id="t-season" class="val">-</span><br>
+            VORTICITY FIELD: <span id="t-wind" class="val">-</span><br>
+            ACTIVE FOLIAGE: <span id="t-leaves" class="val">-</span><br>
+            GROUND BIOMASS: <span id="t-litter" class="val">-</span>
+        </div>
+        <canvas id="darkOakCanvas" width="1100" height="800"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('darkOakCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Matrix Engine Config
+        const CONFIG = {
+            duration: 450, // frames per season
+            canopyDensity: 14, // leaves per terminal twig
+            floorY: 690
+        };
+
+        const SEASONS = ['SUMMER_MATURITY', 'AUTUMN_BURNT', 'WINTER_STORM', 'SPRING_REBIRTH'];
+        let currentSeasonIdx = 0;
+        let timeline = 0;
+
+        let windForce = 0.5;
+        let windTarget = 0.5;
+        let timeGlobal = 0;
+
+        // Dark Oak Moody Color Gradients
+        const COLORS_SUMMER = ['#0f2a1d', '#143522', '#1b432a', '#0a1d14', '#1f4c34'];
+        const COLORS_AUTUMN = ['#6e1a10', '#802211', '#943110', '#541212', '#a64f15', '#400d0d'];
+
+        const systemBranches = [];
+        const systemLeaves = [];
+        const systemGroundBuffer = [];
+
+        // 1. PROCEDURAL DARK OAK ARCHITECTURE GENERATOR (Low, Stocky, Massive spreading)
+        function generateDarkOak(x, y, length, angle, depth, thickness) {
+            // Dark oaks have wavy, highly erratic branch extensions
+            const waviness = (Math.random() - 0.5) * 0.18;
+            const endX = x + Math.cos(angle + waviness) * length;
+            const endY = y + Math.sin(angle + waviness) * length;
+
+            systemBranches.push({ x1: x, y1: y, x2: endX, y2: endY, thickness, depth });
+
+            if (depth === 0) return;
+
+            // Branching strategy: broad spread, minor length reduction per step
+            const nextLen = length * (0.76 + Math.random() * 0.1);
+            const nextThick = thickness * 0.74;
+            
+            // 3-way split capability for dense canopy formation
+            const splits = (depth > 6 || Math.random() > 0.4) ? 3 : 2;
+            const spread = 0.55 + (Math.random() * 0.15); // Broad angular deployment
+
+            for (let i = 0; i < splits; i++) {
+                const branchAngle = angle + (i - (splits - 1) / 2) * spread + (Math.random() - 0.5) * 0.2;
+                generateDarkOak(endX, endY, nextLen, branchAngle, depth - 1, nextThick);
+            }
+        }
+
+        // Initialize Structural Matrix: Short heavy trunk, depth 9 for high fidelity
+        generateDarkOak(550, 710, 130, -Math.PI / 2, 9, 32);
+
+        // 2. PHYSICAL AERODYNAMICS LEAF SIMULATION
+        class DarkOakLeaf {
+            constructor(branch) {
+                // Positional distribution within high-density clusters
+                this.pivotX = branch.x2 + (Math.random() - 0.5) * 45;
+                this.pivotY = branch.y2 + (Math.random() - 0.5) * 45;
+                this.x = this.pivotX;
+                this.y = this.pivotY;
+
+                this.sizeMax = 6 + Math.random() * 7;
+                this.size = this.sizeMax;
+                this.rot = Math.random() * Math.PI * 2;
+
+                this.cSum = COLORS_SUMMER[Math.floor(Math.random() * COLORS_SUMMER.length)];
+                this.cAut = COLORS_AUTUMN[Math.floor(Math.random() * COLORS_AUTUMN.length)];
+                this.color = this.cSum;
+                this.lerpState = 0;
+
+                this.isAttached = true;
+                this.vx = 0;
+                this.vy = 0;
+                
+                // Advanced flutter & turbulence parameters
+                this.turbulenceOffset = Math.random() * 100;
+                this.vortexSpeed = 0.03 + Math.random() * 0.05;
+                this.mass = 0.6 + Math.random() * 0.6;
+            }
+
+            update() {
+                this.turbulenceOffset += this.vortexSpeed;
+
+                if (this.isAttached) {
+                    // Micro-oscillations mimicking complex structural tension during high winds
+                    const tension = Math.sin(this.turbulenceOffset + timeGlobal * 0.05) * (windForce * 1.8);
+                    this.x = this.pivotX + tension;
+                    this.y = this.pivotY + Math.cos(this.turbulenceOffset) * (windForce * 0.4);
+
+                    const state = SEASONS[currentSeasonIdx];
+                    if (state === 'SUMMER_MATURITY') {
+                        this.color = this.cSum;
+                        this.size = this.sizeMax;
+                    } 
+                    else if (state === 'AUTUMN_BURNT') {
+                        if (this.lerpState < 1) this.lerpState += 0.002 + (Math.random() * 0.002);
+                        this.color = interpolateColor(this.cSum, this.cAut, this.lerpState);
+
+                        // Non-linear trigger chance based on time advancement and wind velocity
+                        if (Math.random() < 0.0003 * (timeline / 5) * windForce) {
+                            this.breakAway();
+                        }
+                    } 
+                    else if (state === 'WINTER_STORM') {
+                        if (Math.random() < 0.04 * windForce) this.breakAway();
+                    } 
+                    else if (state === 'SPRING_REBIRTH') {
+                        this.color = this.cSum;
+                        this.lerpState = 0;
+                        this.x = this.pivotX;
+                        this.y = this.pivotY;
+                        this.size = this.sizeMax * Math.min(1, (timeline / (CONFIG.duration * 0.7)));
+                    }
+                } else {
+                    // ADVANCED FLUID DYNAMICS ENGINE (Gravity + Drag + Fluid Vortices)
+                    this.vy += 0.045 * this.mass; // Gravity force adjusted by leaf mass
+                    
+                    // Complex fluid aerodynamics math: combines horizontal drift with a turbulent vortex field
+                    const airVortex = Math.sin(this.turbulenceOffset) * 0.45;
+                    this.vx += (windForce * 0.09) + airVortex;
+
+                    // Quadratic drag deceleration
+                    this.vx *= 0.975;
+                    this.vy *= 0.965;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.rot += (this.vx * 0.03) + Math.cos(this.turbulenceOffset) * 0.02;
+
+                    // Terrain topology map collision
+                    let terrainHeight = CONFIG.floorY + Math.sin(this.x * 0.004) * 20;
+                    if (this.y >= terrainHeight + (Math.random() * 6 - 3)) {
+                        systemGroundBuffer.push({
+                            x: this.x, y: this.y, size: this.size, rot: this.rot, color: this.color, opacity: 1
+                        });
+                        this.isAttached = true;
+                        this.size = 0; // Hide until spring regen
+                    }
+                }
+            }
+
+            breakAway() {
+                this.isAttached = false;
+                this.vy = (Math.random() - 0.2) * 1;
+                this.vx = windForce * 2.2 + (Math.random() - 0.5) * 1.5;
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rot);
+                ctx.fillStyle = this.color;
+
+                // Heavy Intricate Dark Oak Compound Leaf Path Geometry
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size);
+                // Multi-lobed profile vector calculation
+                ctx.quadraticCurveTo(this.size * 0.5, -this.size * 0.6, this.size * 0.4, -this.size * 0.2);
+                ctx.quadraticCurveTo(this.size * 0.8, -this.size * 0.1, this.size * 0.5, this.size * 0.2);
+                ctx.quadraticCurveTo(this.size * 0.6, this.size * 0.7, 0, this.size * 0.9);
+                ctx.quadraticCurveTo(-this.size * 0.6, this.size * 0.7, -this.size * 0.5, this.size * 0.2);
+                ctx.quadraticCurveTo(-this.size * 0.8, -this.size * 0.1, -this.size * 0.4, -this.size * 0.2);
+                ctx.quadraticCurveTo(-this.size * 0.5, -this.size * 0.6, 0, -this.size);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Populate tree canopy structure at terminal nodes
+        systemBranches.forEach(b => {
+            if (b.depth <= 3) {
+                for (let i = 0; i < CONFIG.canopyDensity; i++) {
+                    systemLeaves.push(new DarkOakLeaf(b));
+                }
+            }
+        });
+
+        // Fast high-precision RGB Linear Interpolation
+        function interpolateColor(hex1, hex2, weight) {
+            let c1 = parseInt(hex1.slice(1), 16), c2 = parseInt(hex2.slice(1), 16);
+            let r = Math.round(((c1 >> 16) & 255) * (1 - weight) + ((c2 >> 16) & 255) * weight);
+            let g = Math.round(((c1 >> 8) & 255) * (1 - weight) + ((c2 >> 8) & 255) * weight);
+            let b = Math.round((c1 & 255) * (1 - weight) + (c2 & 255) * weight);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. MASTER COORDINATION SYSTEM ENGINE
+        function runtime() {
+            // Ambient Clearing Operation
+            ctx.fillStyle = '#03060c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            timeline++;
+            timeGlobal++;
+
+            // Global State Engine Machine
+            if (timeline > CONFIG.duration) {
+                timeline = 0;
+                currentSeasonIdx = (currentSeasonIdx + 1) % SEASONS.length;
+            }
+
+            const activeState = SEASONS[currentSeasonIdx];
+
+            // Environmental Physics Modulators
+            if (activeState === 'SUMMER_MATURITY') {
+                windTarget = 0.4 + Math.sin(timeGlobal * 0.01) * 0.2;
+            } else if (activeState === 'AUTUMN_BURNT') {
+                // High periodic spikes simulating heavy autumn gusts
+                windTarget = 1.8 + Math.sin(timeline * 0.03) * 1.3; 
+            } else if (activeState === 'WINTER_STORM') {
+                windTarget = 2.5 + Math.cos(timeline * 0.04) * 1.0; // Violent winter storm parameters
+            } else if (activeState === 'SPRING_REBIRTH') {
+                windTarget = 0.3;
+                // Slowly decay ground buffer during spring rebirth cycle
+                if (systemGroundBuffer.length > 0) systemGroundBuffer.splice(0, 3);
+            }
+
+            // Smooth asymptotic wind convergence step
+            windForce += (windTarget - windForce) * 0.04;
+
+            // Update Telemetry UI HUD Panel
+            document.getElementById('t-season').innerText = activeState.replace('_', ' ');
+            document.getElementById('t-wind').innerText = `${(windForce * 5.2).toFixed(2)} mach`;
+            document.getElementById('t-leaves').innerText = systemLeaves.filter(l => l.isAttached && l.size > 0).length;
+            document.getElementById('t-litter').innerText = systemGroundBuffer.length;
+
+            // Draw Cinematic Depth Atmosphere Glow
+            let skyGlow = ctx.createRadialGradient(550, 450, 100, 550, 450, 650);
+            skyGlow.addColorStop(0, '#0c152b');
+            skyGlow.addColorStop(0.5, '#040814');
+            skyGlow.addColorStop(1, '#020408');
+            ctx.fillStyle = skyGlow;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Render Heavy Gnarly Wood Skeleton Layer
+            systemBranches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                // Layer-based shading map calculation to emphasize depth
+                ctx.strokeStyle = `rgb(${24 - b.depth * 1.8}, ${16 - b.depth}, 11)`;
+                ctx.lineWidth = b.thickness;
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // Parallel Execution Loop for Tree Canopy Layers
+            systemLeaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // Render Static Ground Buffer Layer (Accumulating fallen leaves)
+            for (let i = systemGroundBuffer.length - 1; i >= 0; i--) {
+                let item = systemGroundBuffer[i];
+                
+                // Rot/fade computation parameters executed in late winter freeze
+                if (activeState === 'WINTER_STORM' && timeline > CONFIG.duration * 0.4) {
+                    item.opacity -= 0.004;
+                }
+                if (item.opacity <= 0) {
+                    systemGroundBuffer.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = item.opacity;
+                ctx.translate(item.x, item.y);
+                ctx.rotate(item.rot);
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, item.size, item.size * 0.45, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Draw Procedural Silhouette Horizon Layer
+            ctx.fillStyle = '#020409';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            for (let x = 0; x <= canvas.width; x += 25) {
+                let y = CONFIG.floorY + Math.sin(x * 0.004) * 20;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.fill();
+
+            requestAnimationFrame(runtime);
+        }
+
+        // Start Core Execution Engine
+        runtime();
+    </script>
+</body>
+</html>
