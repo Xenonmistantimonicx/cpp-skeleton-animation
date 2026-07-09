@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Dark Oak Seasonal Cycle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #030508;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+            border: 1px solid #121824;
+            border-radius: 4px;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #d1d5db;
+            background: rgba(8, 12, 20, 0.85);
+            padding: 18px 24px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .season-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        .stats {
+            font-size: 12px;
+            color: #9ca3af;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <div class="title">Biome: Dark Forest</div>
+        <div id="season-display" class="season-name">SUMMER DENSE</div>
+        <div class="stats">
+            FOLIAGE COUNT: <span id="leaf-count" style="color:#f43f5e">0</span><br>
+            WIND TURBULENCE: <span id="wind-force" style="color:#eab308">0.0</span>
+        </div>
+    </div>
+
+    <canvas id="darkOakCanvas" width="1000" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('darkOakCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Season Constants
+        const SEASONS = ['SUMMER', 'AUTUMN', 'WINTER', 'SPRING'];
+        let seasonIdx = 0;
+        let seasonProgress = 0;
+        const SEASON_DURATION = 450; // Frames per season
+
+        // Physics & Atmosphere
+        let wind = 0.1;
+        let targetWind = 0.1;
+        let windTime = 0;
+
+        // Dark Oak Palettes
+        const DARK_OAK_SUMMER = ['#132e18', '#1a3e20', '#24522c', '#0d2111', '#2d6337'];
+        const DARK_OAK_AUTUMN = ['#7c2d12', '#9a3412', '#c2410c', '#451a03', '#d97706'];
+
+        const branches = [];
+        const leaves = [];
+        const groundParticles = [];
+
+        // 1. RECURSIVE HEAVY DARK OAK ARCHITECTURE
+        function generateDarkOak(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                startX: x, startY: y,
+                endX: endX, endY: endY,
+                width: width,
+                depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Dark Oak splits into heavy horizontal spreads
+            const splitCount = depth > 7 ? 2 : (Math.random() < 0.7 ? 3 : 2);
+
+            for (let i = 0; i < splitCount; i++) {
+                const spread = 0.55 + (Math.random() * 0.2 - 0.1);
+                const nextAngle = angle + (i - (splitCount - 1) / 2) * spread + (Math.random() - 0.5) * 0.2;
+                const nextLength = length * (0.7 + Math.random() * 0.12);
+                const nextWidth = width * 0.72;
+
+                generateDarkOak(endX, endY, nextLength, nextAngle, depth - 1, nextWidth);
+            }
+        }
+
+        // Generate Thick Trunk Roots Base
+        generateDarkOak(500, 650, 130, -Math.PI / 2, 9, 32);
+
+        // 2. DENSE CANOPY LEAF CLASS WITH COMPLEX FLUID PHYSICS
+        class DarkOakLeaf {
+            constructor(branch) {
+                this.anchorX = branch.endX + (Math.random() - 0.5) * 45;
+                this.anchorY = branch.endY + (Math.random() - 0.5) * 45;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.baseSize = 6 + Math.random() * 6;
+                this.size = this.baseSize;
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.summerColor = DARK_OAK_SUMMER[Math.floor(Math.random() * DARK_OAK_SUMMER.length)];
+                this.autumnColor = DARK_OAK_AUTUMN[Math.floor(Math.random() * DARK_OAK_AUTUMN.length)];
+                this.currentColor = this.summerColor;
+                this.colorRatio = 0;
+
+                this.isAttached = true;
+                this.vx = 0;
+                this.vy = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.08;
+                this.oscillationSpeed = 0.03 + Math.random() * 0.05;
+                this.oscillationPhase = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.oscillationPhase += this.oscillationSpeed;
+
+                if (this.isAttached) {
+                    // Tree sway effect
+                    const sway = Math.sin(windTime + this.oscillationPhase) * (wind * 3);
+                    this.x = this.anchorX + sway;
+                    this.y = this.anchorY + Math.cos(this.oscillationPhase) * 0.8;
+
+                    const currentSeason = SEASONS[seasonIdx];
+
+                    if (currentSeason === 'SUMMER') {
+                        this.currentColor = this.summerColor;
+                        this.size = this.baseSize;
+                        this.colorRatio = 0;
+                    } 
+                    else if (currentSeason === 'AUTUMN') {
+                        if (this.colorRatio < 1) this.colorRatio += 0.003 + Math.random() * 0.003;
+                        this.currentColor = interpolateColor(this.summerColor, this.autumnColor, this.colorRatio);
+
+                        // Fall threshold increases exponentially as autumn progresses
+                        const detachChance = 0.0003 * Math.pow(seasonProgress / 100, 2) * (wind * 2);
+                        if (Math.random() < detachChance) {
+                            this.detach();
+                        }
+                    } 
+                    else if (currentSeason === 'WINTER') {
+                        if (Math.random() < 0.04) this.detach();
+                    } 
+                    else if (currentSeason === 'SPRING') {
+                        this.isAttached = true;
+                        this.currentColor = this.summerColor;
+                        this.x = this.anchorX;
+                        this.y = this.anchorY;
+                        // Budding growth
+                        const growthFactor = Math.min(1, seasonProgress / (SEASON_DURATION * 0.7));
+                        this.size = this.baseSize * growthFactor;
+                    }
+                } else {
+                    // FALLING PHYSICS (Turbulent aerodynamics)
+                    this.vy += 0.035; // Heavy leaf mass
+                    this.vx += (wind * 0.12) + Math.sin(this.oscillationPhase * 2) * 0.4;
+
+                    this.vx *= 0.96;
+                    this.vy *= 0.96;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.angle += this.rotationSpeed + (this.vx * 0.03);
+
+                    // Hill Terrain Collision
+                    const groundY = 640 + Math.sin((this.x - 500) * 0.0025) * 25;
+                    if (this.y >= groundY) {
+                        groundParticles.push({
+                            x: this.x,
+                            y: groundY + (Math.random() * 6 - 3),
+                            size: this.size,
+                            angle: this.angle,
+                            color: this.currentColor,
+                            alpha: 0.9
+                        });
+                        this.isAttached = true;
+                        this.size = 0;
+                    }
+                }
+            }
+
+            detach() {
+                this.isAttached = false;
+                this.vy = Math.random() * 0.8;
+                this.vx = wind * 2.5 + (Math.random() - 0.5) * 1.5;
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+
+                // Heavy, dense multi-lobed dark oak leaf vector
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.size * 0.8, this.size * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Populate Extremely Dense Canopy
+        branches.forEach(b => {
+            if (b.depth <= 4) {
+                const count = Math.floor(8 + Math.random() * 12);
+                for (let i = 0; i < count; i++) {
+                    leaves.push(new DarkOakLeaf(b));
+                }
+            }
+        });
+
+        // Color Interpolation Engine
+        function interpolateColor(color1, color2, factor) {
+            const c1 = parseInt(color1.slice(1), 16);
+            const c2 = parseInt(color2.slice(1), 16);
+            
+            const r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
+            const r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
+
+            const r = Math.round(r1 + factor * (r2 - r1));
+            const g = Math.round(g1 + factor * (g2 - g1));
+            const b = Math.round(b1 + factor * (b2 - b1));
+
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. MAIN RENDER ENGINE & ATMOSPHERE CONTROL
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            seasonProgress++;
+            windTime += 0.02;
+
+            if (seasonProgress > SEASON_DURATION) {
+                seasonProgress = 0;
+                seasonIdx = (seasonIdx + 1) % SEASONS.length;
+            }
+
+            const currentSeason = SEASONS[seasonIdx];
+
+            // Atmospheric Controls
+            if (currentSeason === 'SUMMER') {
+                targetWind = 0.3 + Math.sin(windTime * 0.5) * 0.2;
+            } else if (currentSeason === 'AUTUMN') {
+                targetWind = 1.8 + Math.sin(windTime * 2) * 1.2; // Stormy gusts
+            } else if (currentSeason === 'WINTER') {
+                targetWind = 0.6;
+            } else if (currentSeason === 'SPRING') {
+                targetWind = 0.2;
+                if (groundParticles.length > 0) groundParticles.splice(0, 2); // Decompose
+            }
+
+            wind += (targetWind - wind) * 0.03;
+
+            // UI Updates
+            document.getElementById('season-display').innerText = `${currentSeason} CYCLE`;
+            document.getElementById('wind-force').innerText = (wind * 5).toFixed(1) + " knots";
+            document.getElementById('leaf-count').innerText = leaves.filter(l => l.isAttached && l.size > 0).length;
+
+            // 1. Draw Background Lighting Gradient (Season dependent)
+            let bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentSeason === 'WINTER') {
+                bgGradient.addColorStop(0, '#020617');
+                bgGradient.addColorStop(1, '#0f172a');
+            } else if (currentSeason === 'AUTUMN') {
+                bgGradient.addColorStop(0, '#1c0a00');
+                bgGradient.addColorStop(1, '#050301');
+            } else {
+                bgGradient.addColorStop(0, '#06130a');
+                bgGradient.addColorStop(1, '#020604');
+            }
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Draw Heavy Dark Oak Branches with Trunk Layering
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                
+                // Deep Dark Wood Texture Color Shift
+                const woodTone = Math.max(10, 28 - b.depth * 2);
+                ctx.strokeStyle = `rgb(${woodTone + 5}, ${woodTone}, ${woodTone - 5})`;
+                ctx.lineWidth = b.width;
+                
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+
+                // Add dark bark shadows on thick trunk sections
+                if (b.width > 12) {
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                    ctx.lineWidth = b.width * 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(b.startX + 2, b.startY);
+                    ctx.lineTo(b.endX + 2, b.endY);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // 3. Render Leaves
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 4. Render Fallen Leaf Litter on Ground
+            for (let i = groundParticles.length - 1; i >= 0; i--) {
+                let p = groundParticles[i];
+                if (currentSeason === 'WINTER' && seasonProgress > SEASON_DURATION * 0.5) {
+                    p.alpha -= 0.004;
+                }
+                if (p.alpha <= 0) {
+                    groundParticles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, p.size * 0.7, p.size * 0.3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 5. Draw Dark Forest Hill Ground Structure
+            ctx.fillStyle = '#030704';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 1000; x += 20) {
+                let y = 640 + Math.sin((x - 500) * 0.0025) * 25;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(1000, 750);
+            ctx.fill();
+
+            requestAnimationFrame(render);
+        }
+
+        // Start Animation Loop
+        render();
+    </script>
+</body>
+</html>
