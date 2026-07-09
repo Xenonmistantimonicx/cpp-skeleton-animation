@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Baobab Tree (Adansonia) - African Savannah Cycle</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #050302;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(212, 120, 43, 0.2);
+            border: 1px solid #231208;
+            border-radius: 8px;
+        }
+        #savannah-hud {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #d4af37;
+            background: rgba(15, 8, 4, 0.9);
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #42200f;
+            pointer-events: none;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .bold { font-weight: bold; color: #f97316; }
+    </style>
+</head>
+<body>
+
+    <div id="savannah-hud">
+        BIOME: <span class="bold">Serengeti Arid Ecosystem</span><br>
+        SPECIES: <span style="color:#f43f5e; font-style:italic;">Adansonia digitata</span><br>
+        PHENOLOGY: <span id="climate-state" class="bold">WET MONSOON</span><br>
+        HYDRO-STORAGE: <span id="water-reserve" style="color:#38bdf8">100%</span>
+    </div>
+
+    <canvas id="baobabCanvas" width="1000" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('baobabCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Savannah Climate Cycles (Baobab stays bare for most of the dry season)
+        const CLIMATES = ['WET_MONSOON', 'EARLY_DRY', 'EXTREME_DROUGHT', 'SPRING_BLOOM'];
+        let climateIdx = 0;
+        let climateTimer = 0;
+        const CLIMATE_DURATION = 400;
+
+        let wind = 0.3;
+        let targetWind = 0.3;
+        let time = 0;
+
+        // Savannah & Baobab Palette Settings
+        const LEAF_WET = ['#3f6212', '#4d7c0f', '#1e3a1e', '#65a30d'];
+        const LEAF_DRY = ['#b45309', '#ca8a04', '#d97706', '#854d0e'];
+        
+        const trunkBaseWidth = 140;
+        const branches = [];
+        const leaves = [];
+        const groundDebris = [];
+
+        // 1. PROCEDURAL BOTTLE-SHAPED BAOBAB STRUCTURE GENERATOR
+        // Generated outwards from the massive center-top crown plateau
+        function buildBaobabCrown(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                startX: x, startY: y,
+                endX: endX, endY: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Baobabs have short, massive, stubby splits (crooked/gnarled angles)
+            const splitCount = depth > 4 ? 3 : 2;
+            for(let i = 0; i < splitCount; i++) {
+                const angleSpread = 0.65 * (Math.random() - 0.5);
+                const nextAngle = angle + (i - (splitCount - 1) / 2) * 0.5 + angleSpread;
+                const nextLength = length * (0.68 + Math.random() * 0.1);
+                const nextWidth = width * 0.65;
+
+                buildBaobabCrown(endX, endY, nextLength, nextAngle, depth - 1, nextWidth);
+            }
+        }
+
+        // Build the crown branch network starting from the top of the massive trunk
+        buildBaobabCrown(500, 380, 85, -Math.PI / 2, 6, 35);
+
+        // 2. PALMATE "FINGER" LEAF PARTICLES
+        class BaobabLeaf {
+            constructor(parentTwig) {
+                this.anchorX = parentTwig.endX + (Math.random() - 0.5) * 35;
+                this.anchorY = parentTwig.endY + (Math.random() - 0.5) * 35;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.maxSize = 7 + Math.random() * 5;
+                this.size = this.maxSize;
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.wetColor = LEAF_WET[Math.floor(Math.random() * LEAF_WET.length)];
+                this.dryColor = LEAF_DRY[Math.floor(Math.random() * LEAF_DRY.length)];
+                this.currentColor = this.wetColor;
+                this.witherStep = 0;
+
+                this.attached = true;
+                this.vx = 0; this.vy = 0;
+                this.swayFreq = 0.04 + Math.random() * 0.04;
+                this.phase = Math.random() * 100;
+            }
+
+            update() {
+                this.phase += this.swayFreq;
+                const currentClimate = CLIMATES[climateIdx];
+
+                if (this.attached) {
+                    // Stiff, minor twig vibration
+                    this.x = this.anchorX + Math.sin(this.phase) * (wind * 1.5);
+                    this.y = this.anchorY + Math.cos(this.phase) * 0.4;
+
+                    if (currentClimate === 'WET_MONSOON') {
+                        this.currentColor = this.wetColor;
+                        this.size = this.maxSize;
+                        this.witherStep = 0;
+                    } 
+                    else if (currentClimate === 'EARLY_DRY') {
+                        if (this.witherStep < 1) this.witherStep += 0.006;
+                        this.currentColor = lerpColors(this.wetColor, this.dryColor, this.witherStep);
+
+                        // Intense drop rate as water resource declines
+                        const dropChance = 0.001 * (climateTimer / 3) * wind;
+                        if (Math.random() < dropChance) this.attached = false;
+                    } 
+                    else if (currentClimate === 'EXTREME_DROUGHT') {
+                        // Everything must shed immediately to stop water loss
+                        if (Math.random() < 0.1) this.attached = false;
+                        this.size = 0;
+                    } 
+                    else if (currentClimate === 'SPRING_BLOOM') {
+                        this.attached = true;
+                        this.currentColor = this.wetColor;
+                        // Quick flash budding sequence
+                        this.size = this.maxSize * Math.min(1, (climateTimer / CLIMATE_DURATION) * 2.5);
+                    }
+                } else {
+                    // DRY AIR LEAF DRIFT DYNAMICS
+                    this.vy += 0.035;
+                    this.vx += (wind * 0.15) + Math.sin(this.phase * 2) * 0.5;
+                    this.vx *= 0.95; this.vy *= 0.95;
+
+                    this.x += this.vx; this.y += this.vy;
+                    this.angle += 0.05;
+
+                    const groundY = 660 + Math.sin((this.x - 500) * 0.002) * 15;
+                    if (this.y >= groundY) {
+                        groundDebris.push({
+                            x: this.x, y: groundY, size: this.size, color: this.currentColor, alpha: 0.8
+                        });
+                        this.attached = true;
+                        this.size = 0; // Prepare hidden node for spring regeneration
+                    }
+                }
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+
+                // Render Palmate/Digitate Cluster (5 interconnected small finger lobes)
+                ctx.beginPath();
+                for(let i = 0; i < 5; i++) {
+                    const lobeAngle = (i - 2) * 0.4;
+                    ctx.rotate(lobeAngle);
+                    ctx.ellipse(0, -this.size * 0.4, this.size * 0.2, this.size * 0.5, 0, 0, Math.PI * 2);
+                    ctx.rotate(-lobeAngle);
+                }
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Bind Leaf Systems
+        branches.forEach(b => {
+            if (b.depth <= 3) {
+                const density = Math.floor(6 + Math.random() * 8);
+                for(let i=0; i<density; i++) leaves.push(new BaobabLeaf(b));
+            }
+        });
+
+        function lerpColors(hex1, hex2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(hex1), rgb2 = parse(hex2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. GRAPHICS LOOPER & ECOSYSTEM RUNTIME
+        function loop() {
+            climateTimer++;
+            time += 0.02;
+
+            if (climateTimer > CLIMATE_DURATION) {
+                climateTimer = 0;
+                climateIdx = (climateIdx + 1) % CLIMATES.length;
+            }
+
+            const currentClimate = CLIMATES[climateIdx];
+
+            // Set climate factors & HUD text indicators
+            let climateText = "";
+            let waterLevel = "100%";
+            if (currentClimate === 'WET_MONSOON') {
+                climateText = "WET MONSOON (LUSH)";
+                waterLevel = "100%";
+                targetWind = 0.4 + Math.sin(time) * 0.2;
+            } else if (currentClimate === 'EARLY_DRY') {
+                climateText = "EARLY DRY SEASON";
+                waterLevel = Math.max(30, Math.round(100 - (climateTimer/CLIMATE_DURATION)*70)) + "%";
+                targetWind = 1.6 + Math.sin(time * 2) * 0.8; // High hot dust storms
+            } else if (currentClimate === 'EXTREME_DROUGHT') {
+                climateText = "EXTREME DROUGHT (BARE)";
+                waterLevel = "25% (CRITICAL)";
+                targetWind = 0.5;
+                if (groundDebris.length > 0) groundDebris.splice(0, 3); // Crumbles to dust
+            } else if (currentClimate === 'SPRING_BLOOM') {
+                climateText = "FLASH REGENESIS REBLOOM";
+                waterLevel = Math.round(25 + (climateTimer/CLIMATE_DURATION)*75) + "%";
+                targetWind = 0.2;
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            document.getElementById('climate-state').innerText = climateText;
+            document.getElementById('water-reserve').innerText = waterLevel;
+
+            // Render African Savannah Sky Canvas Gradient
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentClimate === 'WET_MONSOON') {
+                sky.addColorStop(0, '#1a120b'); sky.addColorStop(1, '#080402');
+            } else if (currentClimate === 'EARLY_DRY' || currentClimate === 'SPRING_BLOOM') {
+                sky.addColorStop(0, '#3a1a05'); sky.addColorStop(0.6, '#1f0d02'); sky.addColorStop(1, '#050201'); // Radiant Amber Dusk
+            } else {
+                sky.addColorStop(0, '#120702'); sky.addColorStop(1, '#000000'); // Harsh Drought Dark
+            }
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER MASSIVE SWOLLEN BOTTLE TRUNK 
+            ctx.save();
+            let trunkGrad = ctx.createLinearGradient(500 - trunkBaseWidth, 0, 500 + trunkBaseWidth, 0);
+            trunkGrad.addColorStop(0, '#261710');
+            trunkGrad.addColorStop(0.3, '#4d3327'); // Elephant-skin gray/brown texture core
+            trunkGrad.addColorStop(0.7, '#593d30');
+            trunkGrad.addColorStop(1, '#1c100a');
+            ctx.fillStyle = trunkGrad;
+
+            // Smooth Bezier Curve Path formulation modeling the thick base expanding outwards
+            ctx.beginPath();
+            ctx.moveTo(500 - trunkBaseWidth / 2, 660); // Base Left
+            ctx.bezierCurveTo(500 - trunkBaseWidth * 1.3, 580, 500 - trunkBaseWidth * 1.1, 460, 470, 380); // Swollen curve up left
+            ctx.lineTo(530, 380); // Crown Plateau width top
+            ctx.bezierCurveTo(500 + trunkBaseWidth * 1.1, 460, 500 + trunkBaseWidth * 1.3, 580, 500 + trunkBaseWidth / 2, 660); // Swollen curve down right
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // 2. RENDER STUBBY CROWN BRANCH ARCHITECTURE
+            ctx.lineCap = 'round';
+            branches.forEach(b => {
+                const woodColor = Math.max(15, 60 - b.depth * 6);
+                ctx.strokeStyle = `rgb(${woodColor}, ${woodColor - 12}, ${woodColor - 20})`;
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+            });
+
+            // 3. UPDATE & DRAW LEAF FRONDS
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 4. RENDER SAVANNAH FLOOR LEAF LITTER
+            for (let i = groundDebris.length - 1; i >= 0; i--) {
+                let d = groundDebris[i];
+                if (currentClimate === 'EXTREME_DROUGHT') d.alpha -= 0.005; // Quick thermal breakdown
+                if (d.alpha <= 0) {
+                    groundDebris.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = d.alpha;
+                ctx.fillStyle = d.color;
+                ctx.beginPath();
+                ctx.arc(d.x, d.y + (Math.random() * 4 - 2), d.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 5. DRAW ARID DESERT GROUND BED
+            ctx.fillStyle = '#0a0502';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 1000; x += 25) {
+                ctx.lineTo(x, 660 + Math.sin((x - 500) * 0.002) * 15);
+            }
+            ctx.lineTo(1000, 750);
+            ctx.fill();
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
