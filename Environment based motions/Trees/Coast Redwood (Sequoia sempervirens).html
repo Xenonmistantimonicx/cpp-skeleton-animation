@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coast Redwood (Sequoia sempervirens) Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #020406;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.9);
+            border: 1px solid #111a24;
+            border-radius: 6px;
+        }
+        #hud-panel {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            color: #94a3b8;
+            background: rgba(4, 7, 12, 0.9);
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+            pointer-events: none;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .highlight { color: #38bdf8; font-weight: bold; }
+        .redwood-text { color: #f87171; }
+    </style>
+</head>
+<body>
+
+    <div id="hud-panel">
+        SPECIES: <span class="redwood-text">S. sempervirens</span><br>
+        HEIGHT FACTOR: <span class="highlight">115.6m (Scale)</span><br>
+        PHENOLOGY: <span id="season-state" class="highlight">EVERGREEN LUSH</span><br>
+        NEEDLE LITTER: <span id="litter-count" style="color:#fb923c">0</span>
+    </div>
+
+    <canvas id="redwoodCanvas" width="950" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('redwoodCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Seasonal setup - Redwoods are evergreen but have seasonal shedding spikes (Cladoptosis)
+        const CYCLES = ['SPRING_RAIN', 'SUMMER_FOG', 'AUTUMN_SHED', 'WINTER_STORM'];
+        let cycleIdx = 1;
+        let cycleTimer = 0;
+        const CYCLE_DURATION = 400;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+        let timeline = 0;
+
+        // Redwood Cinnamon-Red Bark & Deep Needle Palettes
+        const NEEDLE_FRESH = ['#143d28', '#1b4d32', '#0f331e', '#225e3b'];
+        const NEEDLE_SHED = ['#78350f', '#92400e', '#b45309', '#5f2120']; // Rusty brown old needles
+
+        const trunkSegments = [];
+        const lateralBranches = [];
+        const needleFronds = [];
+        const forestFloorLitter = [];
+
+        // 1. MONOLITHICAL VERTICAL TRUNK & HORIZONTAL BRANCH GENERATOR
+        // Redwoods grow massive central pillars with short horizontal tiers
+        function growRedwood() {
+            const baseX = 475;
+            const baseY = 680;
+            const totalHeight = 480;
+            let currentY = baseY;
+            let currentWidth = 36;
+
+            // Build vertical segment map
+            while (currentY > baseY - totalHeight) {
+                const step = 20;
+                const nextY = currentY - step;
+                const nextWidth = currentWidth * 0.96;
+                
+                trunkSegments.push({
+                    x: baseX, y1: currentY, y2: nextY, 
+                    w1: currentWidth, w2: nextWidth
+                });
+
+                // Generate horizontal side branches as we move up (higher up = shorter branches)
+                const heightProgress = (baseY - currentY) / totalHeight;
+                if (heightProgress > 0.2) { // Lower trunk is usually clear of branches
+                    const maxBranchLen = 140 * (1 - heightProgress * 0.7);
+                    
+                    // Left Branch
+                    growLateral(baseX - currentWidth/2, nextY, maxBranchLen, Math.PI + 0.1 - (heightProgress * 0.15), heightProgress);
+                    // Right Branch
+                    growLateral(baseX + currentWidth/2, nextY, maxBranchLen, 0 - 0.1 + (heightProgress * 0.15), heightProgress);
+                }
+
+                currentY = nextY;
+                currentWidth = nextWidth;
+            }
+        }
+
+        function growLateral(startX, startY, length, angle, heightFactor) {
+            const endX = startX + Math.cos(angle) * length;
+            const endY = startY + Math.sin(angle) * length;
+            
+            const bData = { startX, startY, endX, endY, width: 4 * (1 - heightFactor * 0.5) };
+            lateralBranches.push(bData);
+
+            // Sub-twigs for needle clusters
+            const subCount = 3;
+            for(let i = 1; i <= subCount; i++) {
+                const ratio = i / (subCount + 1);
+                const subX = startX + (endX - startX) * ratio;
+                const subY = startY + (endY - startY) * ratio;
+                
+                const subAngle = angle + (i % 2 === 0 ? 0.5 : -0.5);
+                const subLen = length * 0.3;
+                
+                needleFronds.push({
+                    x: subX, y: subY,
+                    ox: subX, oy: subY,
+                    length: subLen,
+                    angle: subAngle,
+                    baseAngle: subAngle
+                });
+            }
+        }
+
+        // Initialize Redwood Matrix
+        growRedwood();
+
+        // 2. CONIFEROUS NEEDLE FROND CLASSES (Matrix Implementation)
+        class RedwoodFrond {
+            constructor(data) {
+                this.data = data;
+                this.x = data.x;
+                this.y = data.y;
+                
+                this.freshColor = NEEDLE_FRESH[Math.floor(Math.random() * NEEDLE_FRESH.length)];
+                this.shedColor = NEEDLE_SHED[Math.floor(Math.random() * NEEDLE_SHED.length)];
+                this.currentColor = this.freshColor;
+                
+                this.isShedding = false;
+                this.colorRatio = 0;
+                this.vx = 0;
+                this.vy = 0;
+                this.flutterSpeed = 0.05 + Math.random() * 0.08;
+                this.phase = Math.random() * Math.PI;
+            }
+
+            update() {
+                this.phase += this.flutterSpeed;
+                const currentCycle = CYCLES[cycleIdx];
+
+                if (!this.isShedding) {
+                    // Wind sway based on hierarchy height
+                    const windSway = Math.sin(timeline + this.phase) * (wind * 2.5);
+                    this.x = this.data.ox + windSway;
+                    this.y = this.data.oy + Math.cos(this.phase) * 0.3;
+
+                    // Cladoptosis Phenology (Old branchlets turn copper-brown and fall)
+                    if (currentCycle === 'AUTUMN_SHED') {
+                        // Random selective branches choose to turn brown (~20% of the tree drops annually)
+                        if (Math.random() < 0.0004 && this.colorRatio === 0) {
+                            this.isShedding = true;
+                        }
+                    }
+
+                    if (this.isShedding) {
+                        if (this.colorRatio < 1) this.colorRatio += 0.01;
+                        this.currentColor = lerpColor(this.freshColor, this.shedColor, this.colorRatio);
+                        
+                        // Detach after turning completely brown
+                        if (this.colorRatio >= 1 && Math.random() < 0.02 * wind) {
+                            this.data.x = -999; // Remove anchor bind
+                        }
+                    } else if (currentCycle === 'SPRING_RAIN') {
+                        // Reset faded slots back to fresh vibrant green tips
+                        this.currentColor = this.freshColor;
+                        this.colorRatio = 0;
+                    }
+                } else if (this.data.x === -999) {
+                    // DROPPING FROND DYNAMICS
+                    this.vy += 0.02; // Gliding fall
+                    this.vx += (wind * 0.1) + Math.sin(this.phase) * 0.2;
+                    this.vx *= 0.98;
+                    this.vy *= 0.97;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.data.angle += 0.02;
+
+                    // Floor hitting logic
+                    const floorY = 675 + Math.sin(this.x * 0.004) * 15;
+                    if (this.y >= floorY) {
+                        forestFloorLitter.push({
+                            x: this.x, y: floorY, 
+                            color: this.currentColor, 
+                            angle: this.data.angle,
+                            alpha: 0.85
+                        });
+                        // Re-bind back onto tree as fresh node for the loop cycle consistency
+                        this.isShedding = false;
+                        this.colorRatio = 0;
+                        this.currentColor = this.freshColor;
+                        this.x = this.data.ox;
+                        this.y = this.data.oy;
+                        this.data.x = this.data.ox;
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.data.angle + Math.sin(this.phase) * (wind * 0.05));
+                
+                // Render flat coniferous frond spray
+                ctx.strokeStyle = this.currentColor;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(this.data.length, 0);
+                ctx.stroke();
+
+                // Small individual comb needles along the twig path
+                ctx.lineWidth = 1;
+                for (let j = 2; j < this.data.length; j += 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(j, 0);
+                    ctx.lineTo(j - 2, 5);
+                    ctx.moveTo(j, 0);
+                    ctx.lineTo(j - 2, -5);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        // Initialize active render arrays
+        const frondInstances = needleFronds.map(f => new RedwoodFrond(f));
+
+        function lerpColor(c1, c2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(c1), rgb2 = parse(c2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. CORE RUNTIME PIPELINE
+        function run() {
+            // Context refresh
+            ctx.fillStyle = '#03060a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            cycleTimer++;
+            timeline += 0.02;
+
+            if (cycleTimer > CYCLE_DURATION) {
+                cycleTimer = 0;
+                cycleIdx = (cycleIdx + 1) % CYCLES.length;
+            }
+
+            const activeCycle = CYCLES[cycleIdx];
+
+            // Atmospheric Control Logic
+            let hudStatus = "";
+            if (activeCycle === 'SUMMER_FOG') {
+                hudStatus = "SUMMER FOG ACQUISITION";
+                targetWind = 0.2 + Math.sin(timeline) * 0.1;
+            } else if (activeCycle === 'AUTUMN_SHED') {
+                hudStatus = "CLADOPTOSIS SHEDDING";
+                targetWind = 0.9 + Math.sin(timeline * 2) * 0.5;
+            } else if (activeCycle === 'WINTER_STORM') {
+                hudStatus = "PACIFIC WINTER GALE";
+                targetWind = 2.4 + Math.sin(cycleTimer * 0.08) * 1.2;
+            } else if (activeCycle === 'SPRING_RAIN') {
+                hudStatus = "SPRING TIP FLUSHING";
+                targetWind = 0.4;
+                if (forestFloorLitter.length > 0) forestFloorLitter.splice(0, 1); // Slowly decays into ground mulch
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            // Update UI Interface Panel
+            document.getElementById('season-state').innerText = hudStatus;
+            document.getElementById('litter-count').innerText = forestFloorLitter.length;
+
+            // 1. Environmental Atmosphere Fog Layer Effect
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            sky.addColorStop(0, '#040b14');
+            if (activeCycle === 'SUMMER_FOG') sky.addColorStop(0.6, '#182432'); // High fog bank simulation
+            sky.addColorStop(1, '#020508');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Render Cinnamon-Red Monolithic Trunk Architecture
+            trunkSegments.forEach(seg => {
+                ctx.save();
+                let barkGradient = ctx.createLinearGradient(seg.x - seg.w1/2, 0, seg.x + seg.w1/2, 0);
+                barkGradient.addColorStop(0, '#3f1712'); // Dark shadow bark edge
+                barkGradient.addColorStop(0.3, '#6e2b1d'); // Rich cinnamon core fiber
+                barkGradient.addColorStop(0.7, '#823424'); 
+                barkGradient.addColorStop(1, '#2c0f0b');
+
+                ctx.fillStyle = barkGradient;
+                ctx.beginPath();
+                ctx.moveTo(seg.x - seg.w1 / 2, seg.y1);
+                ctx.lineTo(seg.x + seg.w1 / 2, seg.y1);
+                ctx.lineTo(seg.x + seg.w2 / 2, seg.y2);
+                ctx.lineTo(seg.x - seg.w2 / 2, seg.y2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 3. Render Woody Side Limbs
+            ctx.lineCap = 'round';
+            lateralBranches.forEach(b => {
+                ctx.strokeStyle = '#2b120e';
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+            });
+
+            // 4. Update and Render Needle Fronds
+            frondInstances.forEach(frond => {
+                frond.update();
+                frond.draw();
+            });
+
+            // 5. Render Layered Fallen Needle Sprays on Ground Bed
+            for (let i = forestFloorLitter.length - 1; i >= 0; i--) {
+                let drop = forestFloorLitter[i];
+                if (activeCycle === 'WINTER_STORM' && cycleTimer > CYCLE_DURATION * 0.6) {
+                    drop.alpha -= 0.003; // Needles compact and convert into rich loam soil
+                }
+                if (drop.alpha <= 0) {
+                    forestFloorLitter.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = drop.alpha;
+                ctx.translate(drop.x, drop.y);
+                ctx.rotate(drop.angle);
+                ctx.strokeStyle = drop.color;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-6, 0); ctx.lineTo(6, 0);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 6. Red Oak/Loam Forest Floor Ground Line
+            ctx.fillStyle = '#050403';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 950; x += 25) {
+                ctx.lineTo(x, 675 + Math.sin(x * 0.004) * 15);
+            }
+            ctx.lineTo(950, 750);
+            ctx.fill();
+
+            requestAnimationFrame(run);
+        }
+
+        run();
+    </script>
+</body>
+</html>
