@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silver Birch Seasonal Cycle</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #080b11;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+            background: linear-gradient(to bottom, #090d16, #111625);
+        }
+        #hud {
+            position: absolute;
+            bottom: 30px;
+            color: #a0aec0;
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        }
+        .season-active {
+            color: #f6e05e;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">SYSTEM STATE: <span id="season-display" class="season-active">INITIALIZING</span></div>
+    <canvas id="birchCanvas" width="900" height="700"></canvas>
+
+    <script>
+        const canvas = document.getElementById('birchCanvas');
+        const ctx = canvas.getContext('2d');
+        const seasonDisplay = document.getElementById('season-display');
+
+        const PHASES = ['SPRING_GROWTH', 'SUMMER_LUSH', 'AUTUMN_GOLD', 'WINTER_BARE'];
+        let phaseIndex = 1; 
+        let clock = 0;
+        const PHASE_TICKS = 350;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+
+        // Birch Specific Profiles
+        const BIRCH_SUMMER = ['#4ebd6c', '#72d48a', '#339e51', '#8ce2a2'];
+        const BIRCH_AUTUMN = ['#f39c12', '#f1c40f', '#f5b041', '#fcd116'];
+
+        const skeleton = [];
+        const canopy = [];
+        const leafLitter = [];
+
+        // 1. SLENDER, WEEPING BIRCH ARCHITECTURE GENERATOR
+        function growBirch(x, y, len, angle, depth, width) {
+            // Birch branches tend to curve upwards initially, then weep at the tips
+            const endX = x + Math.cos(angle) * len;
+            const endY = y + Math.sin(angle) * len;
+
+            skeleton.push({ x1: x, y1: y, x2: endX, y2: endY, width: width, depth: depth });
+
+            if (depth === 0) return;
+
+            const splitCount = depth < 4 ? 3 : 2; // Fine splitting at outer tiers
+            
+            for (let i = 0; i < splitCount; i++) {
+                // Outer twigs droop downwards (weeping effect)
+                let weepAngle = 0.35 * (Math.random() - 0.5);
+                if (depth <= 3) {
+                    weepAngle += 0.25; // Pull downwards due to gravity on thin twigs
+                }
+                
+                const nextAngle = angle + (i - (splitCount - 1) / 2) * 0.4 + weepAngle;
+                const nextLen = len * (0.72 + Math.random() * 0.1);
+                growBirch(endX, endY, nextLen, nextAngle, depth - 1, width * 0.68);
+            }
+        }
+
+        // Generate Birch: Tall, slender trunk base
+        growBirch(450, 600, 125, -Math.PI / 2, 8, 16);
+
+        // 2. HIGH-FREQUENCY FLUTTER LEAF ENGINE
+        class BirchLeaf {
+            constructor(twig) {
+                this.anchorX = twig.x2;
+                this.anchorY = twig.y2;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.maxSize = 4 + Math.random() * 4;
+                this.size = this.maxSize;
+                this.angle = Math.random() * Math.PI;
+
+                this.sumCol = BIRCH_SUMMER[Math.floor(Math.random() * BIRCH_SUMMER.length)];
+                this.autCol = BIRCH_AUTUMN[Math.floor(Math.random() * BIRCH_AUTUMN.length)];
+                this.color = this.sumCol;
+                this.gradientStep = 0;
+
+                this.attached = true;
+                this.vx = 0;
+                this.vy = 0;
+                // High frequency flutter values unique to Birch
+                this.flutterSpeed = 0.15 + Math.random() * 0.2;
+                this.flutterPhase = Math.random() * 50;
+            }
+
+            update() {
+                this.flutterPhase += this.flutterSpeed;
+
+                if (this.attached) {
+                    // Fast, delicate trembling execution
+                    const tremor = Math.sin(this.flutterPhase) * (wind * 2.5);
+                    this.x = this.anchorX + tremor;
+                    this.y = this.anchorY + Math.cos(this.flutterPhase) * 0.5;
+
+                    if (PHASES[phaseIndex] === 'SUMMER_LUSH') {
+                        this.color = this.sumCol;
+                        this.size = this.maxSize;
+                    } 
+                    else if (PHASES[phaseIndex] === 'AUTUMN_GOLD') {
+                        if (this.gradientStep < 1) this.gradientStep += 0.005;
+                        this.color = mixColors(this.sumCol, this.autCol, this.gradientStep);
+
+                        // Lightweight leaves shed fast during autumn wind bursts
+                        if (Math.random() < 0.0008 * clock * wind) {
+                            this.release();
+                        }
+                    } 
+                    else if (PHASES[phaseIndex] === 'WINTER_BARE') {
+                        if (Math.random() < 0.08) this.release();
+                    } 
+                    else if (PHASES[phaseIndex] === 'SPRING_GROWTH') {
+                        this.color = this.sumCol;
+                        this.gradientStep = 0;
+                        this.x = this.anchorX;
+                        this.y = this.anchorY;
+                        this.size = this.maxSize * Math.min(1, (clock / PHASE_TICKS) * 2);
+                    }
+                } else {
+                    // AIR DYNAMICS: Floating lightweight leaf flight path
+                    this.vy += 0.025; // Light gravity mass
+                    this.vx += (wind * 0.08) + Math.sin(this.flutterPhase) * 0.4;
+                    
+                    this.vx *= 0.97;
+                    this.vy *= 0.97;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.angle += 0.05 * Math.sin(this.flutterPhase);
+
+                    if (this.y >= 595 + Math.sin(this.x * 0.01) * 10) {
+                        leafLitter.push({
+                            x: this.x, y: this.y, size: this.size, angle: this.angle, color: this.color, alpha: 1
+                        });
+                        this.attached = true;
+                        this.size = 0;
+                    }
+                }
+            }
+
+            release() {
+                this.attached = false;
+                this.vy = 0.2 + Math.random() * 0.4;
+                this.vx = wind * 1.5 + (Math.random() - 0.5) * 1;
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.color;
+
+                // Triangular / Teardrop Birch Leaf Vector Path
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size); // Pointed leaf tip
+                ctx.lineTo(this.size * 0.7, this.size * 0.2); 
+                ctx.quadraticCurveTo(this.size * 0.4, this.size * 0.8, 0, this.size * 0.6); // Broad base
+                ctx.quadraticCurveTo(-this.size * 0.4, this.size * 0.8, -this.size * 0.7, this.size * 0.2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // populate canopy along fine twigs
+        skeleton.forEach(twig => {
+            if (twig.depth <= 3) {
+                let count = Math.floor(4 + Math.random() * 6);
+                for(let i=0; i<count; i++) canopy.push(new BirchLeaf(twig));
+            }
+        });
+
+        function mixColors(c1, c2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(c1), rgb2 = parse(c2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. MAIN RUNTIME LOOP
+        function step() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            clock++;
+
+            if (clock > PHASE_TICKS) {
+                clock = 0;
+                phaseIndex = (phaseIndex + 1) % PHASES.length;
+            }
+
+            // Atmosphere & State Manager
+            if (PHASES[phaseIndex] === 'SUMMER_LUSH') {
+                seasonDisplay.innerText = "SUMMER LUSH";
+                targetWind = 0.3 + Math.sin(Date.now() * 0.002) * 0.2;
+            } else if (PHASES[phaseIndex] === 'AUTUMN_GOLD') {
+                seasonDisplay.innerText = "GOLD CANOPY SHEDDING";
+                targetWind = 1.4 + Math.sin(clock * 0.04) * 1.0; // Gusty autumn weather
+            } else if (PHASES[phaseIndex] === 'WINTER_BARE') {
+                seasonDisplay.innerText = "WINTER FROST";
+                targetWind = 0.5;
+            } else if (PHASES[phaseIndex] === 'SPRING_GROWTH') {
+                seasonDisplay.innerText = "SPRING REGENESIS";
+                targetWind = 0.2;
+                if (leafLitter.length > 0) leafLitter.splice(0, 2); // Litter decomposes
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            // Render Distinctive White Birch Trunk & Bark Markings
+            skeleton.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                
+                // Create silver-white bark gradient fill
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.x1, b.y1);
+                ctx.lineTo(b.x2, b.y2);
+                ctx.stroke();
+
+                // Dark lenticels/notches on thicker branch segments
+                if (b.width > 4) {
+                    ctx.strokeStyle = '#1a202c';
+                    ctx.lineWidth = b.width * 0.2;
+                    ctx.setLineDash([2, b.width * 1.5]); // Horizontal spot texture
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Update Canopy
+            canopy.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // Update Leaf Litter Bed
+            for (let i = leafLitter.length - 1; i >= 0; i--) {
+                let f = leafLitter[i];
+                if (PHASES[phaseIndex] === 'WINTER_BARE' && clock > PHASE_TICKS * 0.5) {
+                    f.alpha -= 0.006;
+                }
+                if (f.alpha <= 0) {
+                    leafLitter.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = f.alpha;
+                ctx.fillStyle = f.color;
+                ctx.translate(f.x, f.y);
+                ctx.rotate(f.angle);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, f.size, f.size * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Ground Landscape Line
+            ctx.fillStyle = '#0b0f17';
+            ctx.beginPath();
+            ctx.moveTo(0, 700);
+            for(let x=0; x<=900; x+=30) {
+                ctx.lineTo(x, 595 + Math.sin(x * 0.01) * 10);
+            }
+            ctx.lineTo(900, 700);
+            ctx.fill();
+
+            requestAnimationFrame(step);
+        }
+
+        step();
+    </script>
+</body>
+</html>
