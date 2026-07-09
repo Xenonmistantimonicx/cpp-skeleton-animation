@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Sugar Maple (Acer saccharum) - Autumn Blast Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #030407;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            box-shadow: 0 0 60px rgba(239, 68, 68, 0.15);
+            border: 1px solid #111622;
+            border-radius: 8px;
+        }
+        #maple-hud {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            color: #cbd5e1;
+            background: rgba(7, 10, 19, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+            pointer-events: none;
+            font-size: 12px;
+            font-family: monospace;
+            line-height: 1.7;
+        }
+        .highlight { color: #f97316; font-weight: bold; }
+        .maple-crimson { color: #ef4444; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="maple-hud">
+        SPECIES: <span class="maple-crimson">Acer saccharum</span><br>
+        SAP FLOW: <span style="color:#60a5fa">Seasonal Equilibrium</span><br>
+        PHENOLOGY: <span id="season-state" class="highlight">SUMMER DENSE</span><br>
+        CAROTENOID LEVEL: <span id="pigment-state" style="color:#eab308">0.0 ppm</span>
+    </div>
+
+    <canvas id="mapleCanvas" width="1000" height="750"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mapleCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Seasonal Cycles
+        const CYCLES = ['SUMMER_GREEN', 'EARLY_AUTUMN_BLUSH', 'PEAK_FALL_SHOWER', 'WINTER_DORMANCY', 'SPRING_BLOOM'];
+        let cycleIdx = 0;
+        let cycleTimer = 0;
+        const CYCLE_DURATION = 420;
+
+        let wind = 0.2;
+        let targetWind = 0.2;
+        let time = 0;
+
+        // Custom Multi-Tier Maple Leaf Color Sequence
+        const MAPLE_SUMMER = ['#15803d', '#16a34a', '#14532d', '#22c55e'];
+        const MAPLE_AUTUMN_YEL = ['#eab308', '#ca8a04', '#facc15'];
+        const MAPLE_AUTUMN_ORG = ['#ea580c', '#f97316', '#fdba74'];
+        const MAPLE_AUTUMN_RED = ['#dc2626', '#b91c1c', '#991b1b', '#ef4444'];
+
+        const branches = [];
+        const leaves = [];
+        const groundBlanket = [];
+
+        // 1. PROCEDURAL SYMMETRICAL MAPLE CROWN GENERATOR
+        function growMaple(x, y, length, angle, depth, width) {
+            const endX = x + Math.cos(angle) * length;
+            const endY = y + Math.sin(angle) * length;
+
+            branches.push({
+                startX: x, startY: y,
+                endX: endX, endY: endY,
+                width: width, depth: depth
+            });
+
+            if (depth === 0) return;
+
+            // Symmetrical sturdy branching characteristic of Sugar Maples
+            const nextLength = length * (0.74 + Math.random() * 0.08);
+            const nextWidth = width * 0.72;
+
+            // Balanced 3-way split model for rounded crown look
+            growMaple(endX, endY, nextLength, angle - 0.38 - Math.random() * 0.15, depth - 1, nextWidth);
+            growMaple(endX, endY, nextLength, angle + 0.38 + Math.random() * 0.15, depth - 1, nextWidth);
+            if (depth > 4 && Math.random() < 0.5) {
+                growMaple(endX, endY, length * 0.6, angle + (Math.random() - 0.5) * 0.2, depth - 1, nextWidth * 0.8);
+            }
+        }
+
+        // Initialize Tree Structure (Centered, stout trunk with large crown height)
+        growMaple(500, 620, 120, -Math.PI / 2, 8, 22);
+
+        // 2. ADVANCED STAR-SHAPED MAPLE LEAF OBJECT
+        class MapleLeaf {
+            constructor(parentTwig) {
+                this.anchorX = parentTwig.endX + (Math.random() - 0.5) * 40;
+                this.anchorY = parentTwig.endY + (Math.random() - 0.5) * 40;
+                this.x = this.anchorX;
+                this.y = this.anchorY;
+
+                this.baseSize = 7 + Math.random() * 6;
+                this.size = this.baseSize;
+                this.angle = Math.random() * Math.PI * 2;
+
+                // Micro-climatology index for varied branch-by-branch coloring
+                const branchVariant = Math.random();
+                this.summerColor = MAPLE_SUMMER[Math.floor(Math.random() * MAPLE_SUMMER.length)];
+                
+                if (branchVariant < 0.35) {
+                    this.autumnColor = MAPLE_AUTUMN_YEL[Math.floor(Math.random() * MAPLE_AUTUMN_YEL.length)];
+                } else if (branchVariant < 0.7) {
+                    this.autumnColor = MAPLE_AUTUMN_ORG[Math.floor(Math.random() * MAPLE_AUTUMN_ORG.length)];
+                } else {
+                    this.autumnColor = MAPLE_AUTUMN_RED[Math.floor(Math.random() * MAPLE_AUTUMN_RED.length)];
+                }
+
+                this.currentColor = this.summerColor;
+                this.colorStep = 0;
+                this.attached = true;
+                this.vx = 0; this.vy = 0;
+                this.glideFreq = 0.05 + Math.random() * 0.05;
+                this.phase = Math.random() * Math.PI * 2;
+                this.rotationInertia = (Math.random() - 0.5) * 0.05;
+            }
+
+            update() {
+                this.phase += this.glideFreq;
+                const currentCycle = CYCLES[cycleIdx];
+
+                if (this.attached) {
+                    // Wind rustle effect
+                    const tremor = Math.sin(time + this.phase) * (wind * 2);
+                    this.x = this.anchorX + tremor;
+                    this.y = this.anchorY + Math.cos(this.phase) * 0.4;
+
+                    if (currentCycle === 'SUMMER_GREEN') {
+                        this.currentColor = this.summerColor;
+                        this.size = this.baseSize;
+                        this.colorStep = 0;
+                    } 
+                    else if (currentCycle === 'EARLY_AUTUMN_BLUSH') {
+                        // Slow individual pigment activation
+                        if (this.colorStep < 1) this.colorStep += 0.002 + Math.random() * 0.003;
+                        this.currentColor = lerpColors(this.summerColor, this.autumnColor, this.colorStep);
+                    } 
+                    else if (currentCycle === 'PEAK_FALL_SHOWER') {
+                        this.currentColor = this.autumnColor;
+                        
+                        // High cascading fall chance over peak autumn progress
+                        const releaseIndex = 0.0008 * (cycleTimer / 2) * (wind * 1.5);
+                        if (Math.random() < releaseIndex) this.attached = false;
+                    } 
+                    else if (currentCycle === 'WINTER_DORMANCY') {
+                        if (Math.random() < 0.15) this.attached = false; // Shed remnants immediately
+                        this.size = 0;
+                    } 
+                    else if (currentCycle === 'SPRING_BLOOM') {
+                        this.attached = true;
+                        this.currentColor = this.summerColor;
+                        this.colorStep = 0;
+                        this.x = this.anchorX; this.y = this.anchorY;
+                        
+                        const springScale = Math.min(1, (cycleTimer / CYCLE_DURATION) * 2.5);
+                        this.size = this.baseSize * springScale;
+                    }
+                } else {
+                    // FLUID MAPLE GLIDE AERODYNAMICS
+                    this.vy += 0.025; // Light weight leaf drag
+                    this.vx += (wind * 0.1) + Math.sin(this.phase) * 0.5; // Gliding left-to-right weave
+                    this.vx *= 0.97; this.vy *= 0.96;
+
+                    this.x += this.vx; this.y += this.vy;
+                    this.angle += this.rotationInertia + (this.vx * 0.02);
+
+                    const groundY = 620 + Math.sin(this.x * 0.0035) * 20;
+                    if (this.y >= groundY) {
+                        groundBlanket.push({
+                            x: this.x, y: groundY + (Math.random() * 6 - 3),
+                            size: this.size, angle: this.angle,
+                            color: this.currentColor, alpha: 0.9
+                        });
+                        this.attached = true;
+                        this.size = 0; // Hide until spring rebirth
+                    }
+                }
+            }
+
+            draw() {
+                if (this.size <= 0.1) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.currentColor;
+
+                // Pointed 5-Lobed Maple Leaf Path Geometry
+                ctx.beginPath();
+                ctx.moveTo(0, -this.size); // Center Top Tip
+                ctx.lineTo(this.size * 0.2, -this.size * 0.4);
+                ctx.lineTo(this.size * 0.6, -this.size * 0.5); // Upper Right Lobe
+                ctx.lineTo(this.size * 0.3, -2);
+                ctx.lineTo(this.size * 0.8, 0); // Center Right Lobe
+                ctx.lineTo(this.size * 0.3, this.size * 0.3);
+                ctx.lineTo(this.size * 0.5, this.size * 0.7); // Bottom Right Lobe
+                ctx.lineTo(0, this.size * 0.4); // Base Center Base
+                
+                ctx.lineTo(-this.size * 0.5, this.size * 0.7); // Bottom Left Lobe
+                ctx.lineTo(-this.size * 0.3, this.size * 0.3);
+                ctx.lineTo(-this.size * 0.8, 0); // Center Left Lobe
+                ctx.lineTo(-this.size * 0.3, -2);
+                ctx.lineTo(-this.size * 0.6, -this.size * 0.5); // Upper Left Lobe
+                ctx.lineTo(-this.size * 0.2, -this.size * 0.4);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Generate Canopy Layer Bindings
+        branches.forEach(b => {
+            if (b.depth <= 4) {
+                const leafDensity = Math.floor(7 + Math.random() * 10);
+                for (let i = 0; i < leafDensity; i++) leaves.push(new MapleLeaf(b));
+            }
+        });
+
+        function lerpColors(h1, h2, w) {
+            let parse = (h) => parseInt(h.slice(1), 16);
+            let rgb1 = parse(h1), rgb2 = parse(h2);
+            let r = Math.round(((rgb1 >> 16) & 255) * (1 - w) + ((rgb2 >> 16) & 255) * w);
+            let g = Math.round(((rgb1 >> 8) & 255) * (1 - w) + ((rgb2 >> 8) & 255) * w);
+            let b = Math.round((rgb1 & 255) * (1 - w) + (rgb2 & 255) * w);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // 3. GRAPHICS REFRESH MAIN ENGINE
+        function loop() {
+            cycleTimer++;
+            time += 0.02;
+
+            if (cycleTimer > CYCLE_DURATION) {
+                cycleTimer = 0;
+                cycleIdx = (cycleIdx + 1) % CYCLES.length;
+            }
+
+            const currentCycle = CYCLES[cycleIdx];
+
+            // Atmospheric Wind Adjustments & HUD Status updates
+            let envStatus = "", carotenoidTxt = "0.0 ppm";
+            if (currentCycle === 'SUMMER_GREEN') {
+                envStatus = "SUMMER MATURITY";
+                targetWind = 0.3 + Math.sin(time * 0.5) * 0.15;
+            } else if (currentCycle === 'EARLY_AUTUMN_BLUSH') {
+                envStatus = "CAROTENOID CONVERSION";
+                carotenoidTxt = Math.min(85, Math.round((cycleTimer/CYCLE_DURATION)*120)) + ".4 ppm";
+                targetWind = 0.5 + Math.sin(time) * 0.3;
+            } else if (currentCycle === 'PEAK_FALL_SHOWER') {
+                envStatus = "PEAK SHEDDING AUTUMN GUSTS";
+                carotenoidTxt = "140.0 ppm (PEAK)";
+                targetWind = 1.9 + Math.sin(cycleTimer * 0.06) * 1.1; // Strong fall storm cycles
+            } else if (currentCycle === 'WINTER_DORMANCY') {
+                envStatus = "WINTER FROST FREEZE";
+                carotenoidTxt = "0.0 ppm (DORMANT)";
+                targetWind = 0.6;
+            } else if (currentCycle === 'SPRING_BLOOM') {
+                envStatus = "SPRING VASCULAR INTAKE";
+                targetWind = 0.25;
+                if (groundBlanket.length > 0) groundBlanket.splice(0, 2); // Mulch decomposition
+            }
+
+            wind += (targetWind - wind) * 0.04;
+
+            document.getElementById('season-state').innerText = envStatus.replace(/_/g, ' ');
+            document.getElementById('pigment-state').innerText = carotenoidTxt;
+
+            // Render Sky Atmosphere Color profiles
+            let atmosphere = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (currentCycle === 'SUMMER_GREEN') {
+                atmosphere.addColorStop(0, '#040b17'); atmosphere.addColorStop(1, '#02050b');
+            } else if (currentCycle === 'EARLY_AUTUMN_BLUSH' || currentCycle === 'PEAK_FALL_SHOWER') {
+                atmosphere.addColorStop(0, '#1c0c08'); atmosphere.addColorStop(0.7, '#08040b'); atmosphere.addColorStop(1, '#020205'); // Incandescent amber glow background
+            } else {
+                atmosphere.addColorStop(0, '#02050c'); atmosphere.addColorStop(1, '#000000');
+            }
+            ctx.fillStyle = atmosphere;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. RENDER HEAVY GREY BARK WOOD STRUCTURE
+            branches.forEach(b => {
+                ctx.save();
+                ctx.lineCap = 'round';
+                // Premium light ash grey wood bark setup
+                const shade = Math.max(15, 48 - b.depth * 3);
+                ctx.strokeStyle = `rgb(${shade + 4}, ${shade + 4}, ${shade + 8})`;
+                ctx.lineWidth = b.width;
+                ctx.beginPath();
+                ctx.moveTo(b.startX, b.startY);
+                ctx.lineTo(b.endX, b.endY);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // 2. UPDATE & DRAW ACTIVE LEAF NODES
+            leaves.forEach(leaf => {
+                leaf.update();
+                leaf.draw();
+            });
+
+            // 3. RENDER FALLEN AUTUMN FOLIAGE GROUND BLANKET
+            for (let i = groundBlanket.length - 1; i >= 0; i--) {
+                let f = groundBlanket[i];
+                if (currentCycle === 'WINTER_DORMANCY' && cycleTimer > CYCLE_DURATION * 0.5) {
+                    f.alpha -= 0.005; // Fades out safe before spring bloom
+                }
+                if (f.alpha <= 0) {
+                    groundBlanket.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = f.alpha;
+                ctx.translate(f.x, f.y);
+                ctx.rotate(f.angle);
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, f.size * 0.8, f.size * 0.4, 0, 0, Math.PI * 2); // Flattened leaf look on dirt
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 4. DRAW NORTHERN LANDSCAPE RIDGE LINE
+            ctx.fillStyle = '#03050a';
+            ctx.beginPath();
+            ctx.moveTo(0, 750);
+            for (let x = 0; x <= 1000; x += 20) {
+                ctx.lineTo(x, 620 + Math.sin(x * 0.0035) * 20);
+            }
+            ctx.lineTo(1000, 750);
+            ctx.fill();
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
