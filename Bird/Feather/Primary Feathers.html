@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Primary Feather Drag & Aeroelastic Physics Simulator</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(18, 26, 43, 0.85);
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.35);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        #canvas-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            cursor: default;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD Overlay */
+        .hud-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .hud-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 220px;
+        }
+
+        .hud-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .hud-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Control Drawer */
+        #controls-sidebar {
+            width: 340px;
+            height: 100%;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-left: 1px solid var(--border-color);
+            padding: 28px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .control-label span.val {
+            color: var(--accent-color);
+            font-family: monospace;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+            transition: background 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-glow);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            cursor: pointer;
+        }
+
+        .toggle-switch {
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        input[type="checkbox"] {
+            display: none;
+        }
+
+        input[type="checkbox"]:checked + .toggle-switch {
+            background: var(--accent-color);
+        }
+
+        input[type="checkbox"]:checked + .toggle-switch::after {
+            transform: translateX(20px);
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed var(--border-color);
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .instructions strong {
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="featherCanvas"></canvas>
+        
+        <div class="hud-panel">
+            <div class="hud-card">
+                <div class="hud-title">Total Aerodynamic Drag</div>
+                <div class="hud-value" id="hud-drag">0.00 N</div>
+            </div>
+            <div class="hud-card">
+                <div class="hud-title">Aeroelastic Twist Angle</div>
+                <div class="hud-value" id="hud-twist">0.0°</div>
+            </div>
+        </div>
+    </div>
+
+    <aside id="controls-sidebar">
+        <div class="sidebar-header">
+            <h2>Primary Feather Dynamics</h2>
+            <p>Interactive Aeroelastic & Drag Simulation</p>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Feather Count (P10 to P1)</span>
+                <span class="val" id="val-count">10</span>
+            </div>
+            <input type="range" id="param-count" min="4" max="12" value="10" step="1">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Air Density ($\rho$)</span>
+                <span class="val" id="val-density">1.22</span>
+            </div>
+            <input type="range" id="param-density" min="0.1" max="3.0" value="1.22" step="0.05">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Rachis Flex Stiffness ($k_\theta$)</span>
+                <span class="val" id="val-stiffness">0.65</span>
+            </div>
+            <input type="range" id="param-stiffness" min="0.1" max="1.0" value="0.65" step="0.01">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Aeroelastic Torsion</span>
+                <span class="val" id="val-torsion">0.40</span>
+            </div>
+            <input type="range" id="param-torsion" min="0.0" max="1.0" value="0.40" step="0.01">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Ambient Wind Velocity</span>
+                <span class="val" id="val-wind">15 m/s</span>
+            </div>
+            <input type="range" id="param-wind" min="0" max="50" value="15" step="1">
+        </div>
+
+        <label class="toggle-row">
+            <span class="control-label">Show Force Vectors</span>
+            <input type="checkbox" id="param-vectors" checked>
+            <div class="toggle-switch"></div>
+        </label>
+
+        <label class="toggle-row">
+            <span class="control-label">Show Airflow Streamlines</span>
+            <input type="checkbox" id="param-streamlines" checked>
+            <div class="toggle-switch"></div>
+        </label>
+
+        <div class="instructions">
+            <strong>Controls:</strong><br>
+            • <strong>Click & Drag</strong> any feather tip to simulate manual tension/displacement.<br>
+            • <strong>Right-Click & Drag</strong> canvas to adjust wind stream angle.<br>
+            • Feathers automatically calculate dynamic pressure, flutter, and aeroelastic pitch.
+        </div>
+    </aside>
+
+    <script>
+        /**
+         * AAA Grade Primary Feather Drag Simulation Engine
+         * Implements Verlet Integration, Aeroelastic Torsion, and Airfoil Drag Vectors
+         */
+
+        const canvas = document.getElementById('featherCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // State & Parameters
+        const config = {
+            featherCount: 10,
+            airDensity: 1.225,
+            stiffness: 0.65,
+            torsion: 0.40,
+            windSpeed: 15,
+            windAngle: Math.PI, // Default flowing left
+            showVectors: true,
+            showStreamlines: true,
+            segmentCount: 8
+        };
+
+        // UI Binding & Event Listeners
+        const bindControl = (id, prop, valId, suffix = '') => {
+            const el = document.getElementById(id);
+            const display = document.getElementById(valId);
+            el.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                config[prop] = val;
+                if (display) display.textContent = val + suffix;
+                if (prop === 'featherCount') initWing();
+            });
+        };
+
+        bindControl('param-count', 'featherCount', 'val-count');
+        bindControl('param-density', 'airDensity', 'val-density');
+        bindControl('param-stiffness', 'stiffness', 'val-stiffness');
+        bindControl('param-torsion', 'torsion', 'val-torsion');
+        bindControl('param-wind', 'windSpeed', 'val-wind', ' m/s');
+
+        document.getElementById('param-vectors').addEventListener('change', e => config.showVectors = e.target.checked);
+        document.getElementById('param-streamlines').addEventListener('change', e => config.showStreamlines = e.target.checked);
+
+        // Vector Math Utilities
+        class Vector2 {
+            constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+            set(x, y) { this.x = x; this.y = y; return this; }
+            clone() { return new Vector2(this.x, this.y); }
+            add(v) { this.x += v.x; this.y += v.y; return this; }
+            sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+            mult(n) { this.x *= n; this.y *= n; return this; }
+            div(n) { this.x /= n; this.y /= n; return this; }
+            mag() { return Math.hypot(this.x, this.y); }
+            heading() { return Math.atan2(this.y, this.x); }
+            dist(v) { return Math.hypot(this.x - v.x, this.y - v.y); }
+            normalize() { const m = this.mag(); if (m > 0) this.div(m); return this; }
+            static sub(v1, v2) { return new Vector2(v1.x - v2.x, v1.y - v2.y); }
+            static add(v1, v2) { return new Vector2(v1.x + v2.x, v1.y + v2.y); }
+            static fromAngle(angle, length = 1) { return new Vector2(Math.cos(angle) * length, Math.sin(angle) * length); }
+        }
+
+        // Feather Node (Verlet Particle)
+        class Node {
+            constructor(x, y) {
+                this.pos = new Vector2(x, y);
+                this.oldPos = new Vector2(x, y);
+                this.acc = new Vector2(0, 0);
+                this.pinned = false;
+            }
+            update(dt) {
+                if (this.pinned) return;
+                const vel = Vector2.sub(this.pos, this.oldPos).mult(0.95); // Damping
+                this.oldPos.set(this.pos.x, this.pos.y);
+                this.pos.add(vel).add(this.acc.mult(dt * dt));
+                this.acc.set(0, 0);
+            }
+            applyForce(force) {
+                if (!this.pinned) this.acc.add(force);
+            }
+        }
+
+        // Single Primary Feather Data Structure
+        class PrimaryFeather {
+            constructor(index, totalCount, rootPos, baseAngle, length) {
+                this.index = index; // 0 = P1 (inner), totalCount-1 = P10 (outer primary)
+                this.rootPos = rootPos;
+                this.baseAngle = baseAngle;
+                this.targetAngle = baseAngle;
+                this.length = length;
+                this.nodes = [];
+                this.segLengths = [];
+                this.twistAngle = 0;
+                this.currentDragForce = 0;
+
+                const segCount = config.segmentCount;
+                const step = length / segCount;
+
+                // Build shaft spine nodes
+                for (let i = 0; i <= segCount; i++) {
+                    const p = Vector2.fromAngle(baseAngle, i * step).add(rootPos);
+                    const node = new Node(p.x, p.y);
+                    if (i === 0) node.pinned = true;
+                    this.nodes.push(node);
+                    if (i > 0) this.segLengths.push(step);
+                }
+            }
+
+            updatePhysics(dt, windVel) {
+                // 1. Angular Restoring Spring Force along shaft
+                for (let i = 0; i < this.nodes.length - 1; i++) {
+                    const pA = this.nodes[i].pos;
+                    const pB = this.nodes[i + 1].pos;
+                    const currentAngle = Vector2.sub(pB, pA).heading();
+                    
+                    // Progressive stiffness tapering toward tip
+                    const taper = 1 - (i / this.nodes.length) * 0.5;
+                    const flexStiffness = config.stiffness * taper * 1200;
+                    
+                    const angleDiff = this.targetAngle - currentAngle;
+                    const restoringForce = Vector2.fromAngle(currentAngle + Math.PI / 2, angleDiff * flexStiffness);
+                    this.nodes[i + 1].applyForce(restoringForce);
+                }
+
+                // 2. Aerodynamic Drag & Lift Calculations per segment
+                this.currentDragForce = 0;
+                for (let i = 0; i < this.nodes.length - 1; i++) {
+                    const n1 = this.nodes[i];
+                    const n2 = this.nodes[i + 1];
+                    const segVec = Vector2.sub(n2.pos, n1.pos);
+                    const segAngle = segVec.heading();
+
+                    // Relative wind velocity (Ambient Wind + Particle Velocity)
+                    const nodeVel = Vector2.sub(n2.pos, n2.oldPos).div(dt);
+                    const relWind = Vector2.sub(windVel, nodeVel);
+                    const speed = relWind.mag();
+
+                    if (speed > 0.001) {
+                        // Angle of attack (AoA)
+                        const windAngle = relWind.heading();
+                        let aoa = windAngle - (segAngle + this.twistAngle);
+
+                        // Normalize AoA to [-PI, PI]
+                        aoa = Math.atan2(Math.sin(aoa), Math.cos(aoa));
+
+                        // Aerodynamic Drag Coefficients (C_d) and Lift (C_l)
+                        const cd = (1.2 * Math.pow(Math.sin(aoa), 2) + 0.05) * (1 - this.index * 0.03);
+                        const cl = Math.sin(2 * aoa) * 0.8;
+
+                        // Area scales with primary feather width tapering
+                        const widthProgress = i / this.nodes.length;
+                        const vaneWidth = (1 - Math.abs(widthProgress - 0.4) * 1.5) * (30 + (this.index / config.featherCount) * 20);
+                        const area = (segVec.mag() * Math.max(vaneWidth, 4)) / 10000; // m^2
+
+                        // Force magnitude: 0.5 * rho * v^2 * Cd * A
+                        const dynamicPressure = 0.5 * config.airDensity * speed * speed;
+                        const dragMag = dynamicPressure * cd * area * 150;
+                        const liftMag = dynamicPressure * cl * area * 150;
+
+                        const dragVector = Vector2.fromAngle(windAngle, dragMag);
+                        const liftVector = Vector2.fromAngle(windAngle + Math.PI / 2, liftMag);
+
+                        n2.applyForce(dragVector);
+                        n2.applyForce(liftVector);
+
+                        this.currentDragForce += dragMag;
+                    }
+                }
+
+                // 3. Aeroelastic Pitching / Twist Dynamics
+                // Asymmetric vane creates torque that twists the rachis based on total drag
+                const targetTwist = (this.currentDragForce * 0.003) * config.torsion * (this.index + 1) * 0.2;
+                this.twistAngle += (targetTwist - this.twistAngle) * 0.1;
+
+                // 4. Verlet Particle Motion Integration
+                for (let i = 0; i < this.nodes.length; i++) {
+                    this.nodes[i].update(dt);
+                }
+
+                // 5. Distance & Length Constraints (Rigid Bone/Shaft structural integrity)
+                for (let iter = 0; iter < 5; iter++) {
+                    for (let i = 0; i < this.segLengths.length; i++) {
+                        const nA = this.nodes[i];
+                        const nB = this.nodes[i + 1];
+                        const dist = nA.pos.dist(nB.pos);
+                        const diff = (dist - this.segLengths[i]) / (dist || 1);
+
+                        if (!nA.pinned) nA.pos.add(Vector2.sub(nB.pos, nA.pos).mult(0.5 * diff));
+                        if (!nB.pinned) nB.pos.sub(Vector2.sub(nB.pos, nA.pos).mult(0.5 * diff));
+                    }
+                }
+            }
+
+            draw(ctx) {
+                const segs = this.nodes;
+                
+                // Draw Feather Vane Geometry (Asymmetric Blade)
+                ctx.save();
+                ctx.beginPath();
+                
+                // Leading Edge Path
+                ctx.moveTo(segs[0].pos.x, segs[0].pos.y);
+                for (let i = 1; i < segs.length; i++) {
+                    const progress = i / segs.length;
+                    const segAngle = Vector2.sub(segs[i].pos, segs[i-1].pos).heading();
+                    const vaneWidth = Math.sin(progress * Math.PI) * (12 + this.index * 3);
+                    const leadAngle = segAngle - Math.PI / 2 + this.twistAngle * 0.5;
+                    
+                    const vx = segs[i].pos.x + Math.cos(leadAngle) * (vaneWidth * 0.35);
+                    const vy = segs[i].pos.y + Math.sin(leadAngle) * (vaneWidth * 0.35);
+                    ctx.lineTo(vx, vy);
+                }
+
+                // Trailing Edge Path (Wider Vane)
+                for (let i = segs.length - 1; i >= 1; i--) {
+                    const progress = i / segs.length;
+                    const segAngle = Vector2.sub(segs[i].pos, segs[i-1].pos).heading();
+                    const vaneWidth = Math.sin(progress * Math.PI) * (12 + this.index * 3);
+                    const trailAngle = segAngle + Math.PI / 2 + this.twistAngle * 0.5;
+
+                    const vx = segs[i].pos.x + Math.cos(trailAngle) * (vaneWidth * 0.85);
+                    const vy = segs[i].pos.y + Math.sin(trailAngle) * (vaneWidth * 0.85);
+                    ctx.lineTo(vx, vy);
+                }
+
+                ctx.closePath();
+
+                // Dynamic Gradient Fill for realistic Primary Feather appearance
+                const grad = ctx.createLinearGradient(
+                    segs[0].pos.x, segs[0].pos.y, 
+                    segs[segs.length - 1].pos.x, segs[segs.length - 1].pos.y
+                );
+                
+                // Gradient styling according to primary feather index (Outer feathers darker/sleeker)
+                const lightness = 25 + (this.index / config.featherCount) * 20;
+                grad.addColorStop(0, `hsl(215, 25%, ${lightness - 10}%)`);
+                grad.addColorStop(0.7, `hsl(210, 30%, ${lightness}%)`);
+                grad.addColorStop(1, `hsl(195, 80%, ${lightness + 25}%)`); // Iridescent outer tip
+
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Draw Central Shaft (Rachis)
+                ctx.beginPath();
+                ctx.moveTo(segs[0].pos.x, segs[0].pos.y);
+                for (let i = 1; i < segs.length; i++) {
+                    ctx.lineTo(segs[i].pos.x, segs[i].pos.y);
+                }
+                ctx.strokeStyle = "rgba(240, 246, 252, 0.85)";
+                ctx.lineWidth = Math.max(1.5, 4 - (this.index * 0.2));
+                ctx.stroke();
+
+                // Vector Overlay Visualization
+                if (config.showVectors) {
+                    const tipNode = segs[segs.length - 1];
+                    const dragLen = this.currentDragForce * 0.4;
+                    if (dragLen > 2) {
+                        // Red Drag Vector
+                        ctx.beginPath();
+                        ctx.moveTo(tipNode.pos.x, tipNode.pos.y);
+                        const dragEnd = Vector2.add(tipNode.pos, Vector2.fromAngle(config.windAngle, dragLen));
+                        ctx.lineTo(dragEnd.x, dragEnd.y);
+                        ctx.strokeStyle = "#ef4444";
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        
+                        // Vector Arrowhead
+                        ctx.beginPath();
+                        ctx.arc(dragEnd.x, dragEnd.y, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = "#ef4444";
+                        ctx.fill();
+                    }
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // Global Simulation Scope & State
+        let primaryFeathers = [];
+        let wingBasePos = new Vector2(0, 0);
+        let draggedNode = null;
+        let isRightDragging = false;
+        let lastMousePos = new Vector2();
+
+        function initWing() {
+            primaryFeathers = [];
+            const w = canvas.width;
+            const h = canvas.height;
+            wingBasePos.set(w * 0.32, h * 0.55);
+
+            const count = config.featherCount;
+            // Primary feathers fan out across carpal joint
+            const fanStartAngle = -Math.PI * 0.85; 
+            const fanEndAngle = -Math.PI * 0.15;
+
+            for (let i = 0; i < count; i++) {
+                const ratio = i / (count - 1);
+                // Length increases from P1 to P10
+                const featherLength = 180 + ratio * 160; 
+                const baseAngle = fanStartAngle + ratio * (fanEndAngle - fanStartAngle);
+                
+                // Slight root offset along carpometacarpus bone
+                const rootOffset = Vector2.fromAngle(baseAngle + Math.PI/2, (i - count/2) * 12);
+                const root = Vector2.add(wingBasePos, rootOffset);
+
+                primaryFeathers.push(new PrimaryFeather(i, count, root, baseAngle, featherLength));
+            }
+        }
+
+        // Window & Canvas Resize
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initWing();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Interactive Mouse/Touch Handlers
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouse = new Vector2(e.clientX - rect.left, e.clientY - rect.top);
+            lastMousePos.set(mouse.x, mouse.y);
+
+            if (e.button === 2) {
+                // Right click: Rotate Wind Stream
+                isRightDragging = true;
+                return;
+            }
+
+            // Left click: Find closest feather tip or shaft node to drag
+            let closestDist = Infinity;
+            draggedNode = null;
+
+            primaryFeathers.forEach(f => {
+                f.nodes.forEach((node, idx) => {
+                    if (idx === 0) return; // Cannot drag root bone
+                    const d = node.pos.dist(mouse);
+                    if (d < 35 && d < closestDist) {
+                        closestDist = d;
+                        draggedNode = node;
+                    }
+                });
+            });
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouse = new Vector2(e.clientX - rect.left, e.clientY - rect.top);
+
+            if (draggedNode) {
+                draggedNode.pos.set(mouse.x, mouse.y);
+                draggedNode.oldPos.set(mouse.x, mouse.y);
+            } else if (isRightDragging) {
+                const delta = Vector2.sub(mouse, lastMousePos);
+                config.windAngle += delta.x * 0.005;
+            }
+
+            lastMousePos.set(mouse.x, mouse.y);
+        });
+
+        window.addEventListener('mouseup', () => {
+            draggedNode = null;
+            isRightDragging = false;
+        });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Airflow Streamline Visualizer Particles
+        const streamlines = Array.from({ length: 40 }, () => ({
+            pos: new Vector2(Math.random() * 1200, Math.random() * 800),
+            life: Math.random() * 100
+        }));
+
+        function drawStreamlines(windVel) {
+            if (!config.showStreamlines) return;
+
+            ctx.save();
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.15)";
+            ctx.lineWidth = 1.5;
+
+            const speed = windVel.mag();
+            const dir = windVel.clone().normalize();
+
+            streamlines.forEach(p => {
+                p.pos.add(Vector2.mult(dir, speed * 0.4));
+                p.life += 1;
+
+                if (p.life > 100 || p.pos.x < -50 || p.pos.x > canvas.width + 50 || p.pos.y < -50 || p.pos.y > canvas.height + 50) {
+                    p.pos.set(
+                        dir.x < 0 ? canvas.width + Math.random() * 50 : -Math.random() * 50,
+                        Math.random() * canvas.height
+                    );
+                    p.life = 0;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(p.pos.x, p.pos.y);
+                const tail = Vector2.sub(p.pos, Vector2.mult(dir, Math.min(speed * 2, 40)));
+                ctx.lineTo(tail.x, tail.y);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        // Anatomical Bone Overlay
+        function drawCarpometacarpusBone() {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(wingBasePos.x - 40, wingBasePos.y + 20);
+            ctx.lineTo(wingBasePos.x, wingBasePos.y);
+
+            primaryFeathers.forEach(f => {
+                ctx.lineTo(f.rootPos.x, f.rootPos.y);
+            });
+
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.4)";
+            ctx.lineWidth = 14;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke();
+
+            // Bone highlight
+            ctx.strokeStyle = "rgba(241, 245, 249, 0.7)";
+            ctx.lineWidth = 6;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Main Simulation Loop
+        let lastTime = performance.now();
+        function animate(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.032); // Cap delta time
+            lastTime = currentTime;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Compute ambient wind vector
+            const windVel = Vector2.fromAngle(config.windAngle, config.windSpeed * 10);
+
+            // Render Airflow Background
+            drawStreamlines(windVel);
+
+            // Physics Update Step
+            let totalDrag = 0;
+            let avgTwist = 0;
+
+            primaryFeathers.forEach(feather => {
+                feather.updatePhysics(dt, windVel);
+                totalDrag += feather.currentDragForce;
+                avgTwist += Math.abs(feather.twistAngle);
+            });
+
+            // Draw Anatomical Structure & Primary Feathers (Inner P1 -> Outer P10 layer order)
+            drawCarpometacarpusBone();
+            primaryFeathers.forEach(feather => feather.draw(ctx));
+
+            // Update Real-Time HUD Metrics
+            document.getElementById('hud-drag').textContent = (totalDrag * 0.1).toFixed(2) + " N";
+            document.getElementById('hud-twist').textContent = ((avgTwist / primaryFeathers.length) * (180 / Math.PI)).toFixed(1) + "°";
+
+            requestAnimationFrame(animate);
+        }
+
+        // Bootstrapping
+        resizeCanvas();
+        requestAnimationFrame(animate);
+
+    </script>
+</body>
+</html>
