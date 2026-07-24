@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secondary Feathers - Aeroelastic Camber & Overlap Engine</title>
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --panel-bg: rgba(15, 23, 42, 0.88);
+            --accent-color: #38bdf8;
+            --accent-amber: #f59e0b;
+            --accent-glow: rgba(56, 189, 248, 0.35);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        #canvas-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            cursor: default;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD Overlay */
+        .hud-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .hud-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 230px;
+        }
+
+        .hud-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .hud-value {
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+        }
+
+        .hud-value.warning {
+            color: var(--accent-amber);
+        }
+
+        /* Controls Sidebar */
+        #controls-sidebar {
+            width: 350px;
+            height: 100%;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-left: 1px solid var(--border-color);
+            padding: 28px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .control-label span.val {
+            color: var(--accent-color);
+            font-family: monospace;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-glow);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            cursor: pointer;
+        }
+
+        .toggle-switch {
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        input[type="checkbox"] {
+            display: none;
+        }
+
+        input[type="checkbox"]:checked + .toggle-switch {
+            background: var(--accent-color);
+        }
+
+        input[type="checkbox"]:checked + .toggle-switch::after {
+            transform: translateX(20px);
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed var(--border-color);
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .instructions strong {
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="secondaryCanvas"></canvas>
+        
+        <div class="hud-panel">
+            <div class="hud-card">
+                <div class="hud-title">Secondary Wing Aerodynamic Lift</div>
+                <div class="hud-value" id="hud-lift">0.00 N</div>
+            </div>
+            <div class="hud-card">
+                <div class="hud-title">Camber Surface Pressure</div>
+                <div class="hud-value" id="hud-pressure">0.0 kPa</div>
+            </div>
+            <div class="hud-card">
+                <div class="hud-title">Aeroelastic Stall State</div>
+                <div class="hud-value" id="hud-stall">LAMINAR</div>
+            </div>
+        </div>
+    </div>
+
+    <aside id="controls-sidebar">
+        <div class="sidebar-header">
+            <h2>Secondary Feather Dynamics</h2>
+            <p>Camber Flex & Inter-Feather Contact Physics</p>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Secondary Feathers ($S_1 \text{--} S_n$)</span>
+                <span class="val" id="val-count">12</span>
+            </div>
+            <input type="range" id="param-count" min="6" max="18" value="12" step="1">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Angle of Attack ($\alpha$)</span>
+                <span class="val" id="val-aoa">12°</span>
+            </div>
+            <input type="range" id="param-aoa" min="-10" max="35" value="12" step="1">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Air Density ($\rho$)</span>
+                <span class="val" id="val-density">1.22</span>
+            </div>
+            <input type="range" id="param-density" min="0.2" max="3.0" value="1.22" step="0.05">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Transverse Camber Arching</span>
+                <span class="val" id="val-camber">0.55</span>
+            </div>
+            <input type="range" id="param-camber" min="0.1" max="1.0" value="0.55" step="0.01">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Inter-Feather Friction ($S_n \leftrightarrow S_{n+1}$)</span>
+                <span class="val" id="val-friction">0.70</span>
+            </div>
+            <input type="range" id="param-friction" min="0.0" max="1.0" value="0.70" step="0.02">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Airflow Stream Velocity</span>
+                <span class="val" id="val-wind">18 m/s</span>
+            </div>
+            <input type="range" id="param-wind" min="0" max="50" value="18" step="1">
+        </div>
+
+        <label class="toggle-row">
+            <span class="control-label">Show Lift & Drag Forces</span>
+            <input type="checkbox" id="param-vectors" checked>
+            <div class="toggle-switch"></div>
+        </label>
+
+        <label class="toggle-row">
+            <span class="control-label">Show Boundary Layer Airflow</span>
+            <input type="checkbox" id="param-streamlines" checked>
+            <div class="toggle-switch"></div>
+        </label>
+
+        <div class="instructions">
+            <strong>Controls:</strong><br>
+            • <strong>Click & Drag</strong> any feather tip ($S_1\text{--}S_{12}$) to test overlapping friction mechanics.<br>
+            • <strong>Right-Click & Drag</strong> to rotate the Ulna bone angle.<br>
+            • Increase Angle of Attack ($\alpha > 22^\circ$) to trigger turbulent boundary layer stall.
+        </div>
+    </aside>
+
+    <script>
+        /**
+         * AAA Grade Secondary Feather Physics & Aerodynamic Engine
+         * Features Verlet Spring-Mass Spine, Transverse Camber Arching, 
+         * Inter-Feather Contact Constraints, and Stall Turbulence Generation.
+         */
+
+        const canvas = document.getElementById('secondaryCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Core Parameters State
+        const config = {
+            featherCount: 12,
+            aoa: 12, // Angle of attack in degrees
+            airDensity: 1.225,
+            camber: 0.55,
+            friction: 0.70,
+            windSpeed: 18,
+            windAngle: Math.PI, // Wind coming from right to left
+            showVectors: true,
+            showStreamlines: true,
+            segmentCount: 7
+        };
+
+        // UI Event Binding Utility
+        const bindControl = (id, prop, valId, suffix = '') => {
+            const el = document.getElementById(id);
+            const display = document.getElementById(valId);
+            el.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                config[prop] = val;
+                if (display) display.textContent = val + suffix;
+                if (prop === 'featherCount') initUlnaWing();
+            });
+        };
+
+        bindControl('param-count', 'featherCount', 'val-count');
+        bindControl('param-aoa', 'aoa', 'val-aoa', '°');
+        bindControl('param-density', 'airDensity', 'val-density');
+        bindControl('param-camber', 'camber', 'val-camber');
+        bindControl('param-friction', 'friction', 'val-friction');
+        bindControl('param-wind', 'windSpeed', 'val-wind', ' m/s');
+
+        document.getElementById('param-vectors').addEventListener('change', e => config.showVectors = e.target.checked);
+        document.getElementById('param-streamlines').addEventListener('change', e => config.showStreamlines = e.target.checked);
+
+        // Vector Math Utility Class
+        class Vector2 {
+            constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+            set(x, y) { this.x = x; this.y = y; return this; }
+            clone() { return new Vector2(this.x, this.y); }
+            add(v) { this.x += v.x; this.y += v.y; return this; }
+            sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+            mult(n) { this.x *= n; this.y *= n; return this; }
+            div(n) { this.x /= n; this.y /= n; return this; }
+            mag() { return Math.hypot(this.x, this.y); }
+            heading() { return Math.atan2(this.y, this.x); }
+            dist(v) { return Math.hypot(this.x - v.x, this.y - v.y); }
+            normalize() { const m = this.mag(); if (m > 0) this.div(m); return this; }
+            static sub(v1, v2) { return new Vector2(v1.x - v2.x, v1.y - v2.y); }
+            static add(v1, v2) { return new Vector2(v1.x + v2.x, v1.y + v2.y); }
+            static fromAngle(angle, length = 1) { return new Vector2(Math.cos(angle) * length, Math.sin(angle) * length); }
+        }
+
+        // Verlet Physical Node
+        class Node {
+            constructor(x, y) {
+                this.pos = new Vector2(x, y);
+                this.oldPos = new Vector2(x, y);
+                this.acc = new Vector2(0, 0);
+                this.pinned = false;
+            }
+            update(dt) {
+                if (this.pinned) return;
+                const vel = Vector2.sub(this.pos, this.oldPos).mult(0.93); // Structural damping
+                this.oldPos.set(this.pos.x, this.pos.y);
+                this.pos.add(vel).add(this.acc.mult(dt * dt));
+                this.acc.set(0, 0);
+            }
+            applyForce(force) {
+                if (!this.pinned) this.acc.add(force);
+            }
+        }
+
+        // Secondary Feather Simulation Class
+        class SecondaryFeather {
+            constructor(index, totalCount, rootPos, baseAngle, length) {
+                this.index = index; // 0 = S1 (closest to primaries/wrist), higher = inner secondaries
+                this.rootPos = rootPos;
+                this.baseAngle = baseAngle;
+                this.targetAngle = baseAngle;
+                this.length = length;
+                this.nodes = [];
+                this.segLengths = [];
+                this.camberFlex = 0;
+                this.currentLiftForce = 0;
+                this.currentDragForce = 0;
+
+                const segCount = config.segmentCount;
+                const step = length / segCount;
+
+                // Spine nodes initialization
+                for (let i = 0; i <= segCount; i++) {
+                    const p = Vector2.fromAngle(baseAngle, i * step).add(rootPos);
+                    const node = new Node(p.x, p.y);
+                    if (i === 0) node.pinned = true;
+                    this.nodes.push(node);
+                    if (i > 0) this.segLengths.push(step);
+                }
+            }
+
+            updatePhysics(dt, windVel) {
+                // 1. Rachis Restoring Stiffness
+                for (let i = 0; i < this.nodes.length - 1; i++) {
+                    const pA = this.nodes[i].pos;
+                    const pB = this.nodes[i + 1].pos;
+                    const currentAngle = Vector2.sub(pB, pA).heading();
+                    
+                    const stiffnessFactor = 1400 * (1 - (i / this.nodes.length) * 0.4);
+                    const angleDiff = this.targetAngle - currentAngle;
+                    const restoringForce = Vector2.fromAngle(currentAngle + Math.PI / 2, angleDiff * stiffnessFactor);
+                    this.nodes[i + 1].applyForce(restoringForce);
+                }
+
+                // 2. High-Lift Cambered Airfoil Aerodynamics
+                this.currentLiftForce = 0;
+                this.currentDragForce = 0;
+
+                const aoaRad = (config.aoa * Math.PI) / 180;
+                const totalAngle = config.windAngle + aoaRad;
+
+                for (let i = 0; i < this.nodes.length - 1; i++) {
+                    const n1 = this.nodes[i];
+                    const n2 = this.nodes[i + 1];
+                    const segVec = Vector2.sub(n2.pos, n1.pos);
+                    const segAngle = segVec.heading();
+
+                    const nodeVel = Vector2.sub(n2.pos, n2.oldPos).div(dt);
+                    const relWind = Vector2.sub(windVel, nodeVel);
+                    const speed = relWind.mag();
+
+                    if (speed > 0.001) {
+                        let effAoa = totalAngle - segAngle;
+                        effAoa = Math.atan2(Math.sin(effAoa), Math.cos(effAoa));
+
+                        // Cambered airfoil Lift Coefficient (Cl) & Drag Coefficient (Cd)
+                        // Stall occurs around AoA > 20 degrees
+                        const isStalled = Math.abs(effAoa) > 0.38; // ~22 degrees
+                        let cl = Math.sin(2 * effAoa) * (1.4 + config.camber * 0.8);
+                        let cd = (1.5 * Math.pow(Math.sin(effAoa), 2) + 0.08);
+
+                        if (isStalled) {
+                            cl *= 0.45; // Lift breakdown post-stall
+                            cd *= 2.2;  // Severe pressure drag penalty
+                            
+                            // High-frequency turbulent flutter during stall
+                            const flutter = Vector2.fromAngle(Math.random() * Math.PI * 2, Math.random() * speed * 25);
+                            n2.applyForce(flutter);
+                        }
+
+                        // Wide secondary vane surface area
+                        const widthProgress = i / this.nodes.length;
+                        const vaneWidth = Math.sin(widthProgress * Math.PI) * 45; // Broad rounded shape
+                        const area = (segVec.mag() * vaneWidth) / 8000;
+
+                        const q = 0.5 * config.airDensity * speed * speed; // Dynamic pressure
+                        const liftMag = q * cl * area * 120;
+                        const dragMag = q * cd * area * 120;
+
+                        const liftVector = Vector2.fromAngle(relWind.heading() - Math.PI / 2, liftMag);
+                        const dragVector = Vector2.fromAngle(relWind.heading(), dragMag);
+
+                        n2.applyForce(liftVector);
+                        n2.applyForce(dragVector);
+
+                        this.currentLiftForce += liftMag;
+                        this.currentDragForce += dragMag;
+                    }
+                }
+
+                // 3. Dynamic Transverse Camber Flexing (Bending curvature under dynamic pressure)
+                const targetCamber = (this.currentLiftForce * 0.004) * config.camber;
+                this.camberFlex += (targetCamber - this.camberFlex) * 0.12;
+
+                // 4. Integration
+                for (let i = 0; i < this.nodes.length; i++) {
+                    this.nodes[i].update(dt);
+                }
+
+                // 5. Distance & Rigid Spine Constraints
+                for (let iter = 0; iter < 5; iter++) {
+                    for (let i = 0; i < this.segLengths.length; i++) {
+                        const nA = this.nodes[i];
+                        const nB = this.nodes[i + 1];
+                        const dist = nA.pos.dist(nB.pos);
+                        const diff = (dist - this.segLengths[i]) / (dist || 1);
+
+                        if (!nA.pinned) nA.pos.add(Vector2.sub(nB.pos, nA.pos).mult(0.5 * diff));
+                        if (!nB.pinned) nB.pos.sub(Vector2.sub(nB.pos, nA.pos).mult(0.5 * diff));
+                    }
+                }
+            }
+
+            draw(ctx) {
+                const segs = this.nodes;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(segs[0].pos.x, segs[0].pos.y);
+
+                // Draw Broad Cambered Secondary Vane Surface
+                // Leading Vane (Narrower)
+                for (let i = 1; i < segs.length; i++) {
+                    const progress = i / segs.length;
+                    const segAngle = Vector2.sub(segs[i].pos, segs[i-1].pos).heading();
+                    const vaneWidth = Math.sin(progress * Math.PI) * 16;
+                    const angle = segAngle - Math.PI / 2;
+                    
+                    const vx = segs[i].pos.x + Math.cos(angle) * vaneWidth;
+                    const vy = segs[i].pos.y + Math.sin(angle) * vaneWidth;
+                    ctx.lineTo(vx, vy);
+                }
+
+                // Trailing Vane (Broad rounded camber profile)
+                for (let i = segs.length - 1; i >= 1; i--) {
+                    const progress = i / segs.length;
+                    const segAngle = Vector2.sub(segs[i].pos, segs[i-1].pos).heading();
+                    const vaneWidth = Math.sin(progress * Math.PI) * (38 + this.camberFlex * 15);
+                    const angle = segAngle + Math.PI / 2;
+
+                    // Transverse arch curvature simulation
+                    const archOffset = Math.sin(progress * Math.PI) * (this.camberFlex * 8);
+                    const vx = segs[i].pos.x + Math.cos(angle) * vaneWidth + Math.cos(segAngle) * archOffset;
+                    const vy = segs[i].pos.y + Math.sin(angle) * vaneWidth + Math.sin(segAngle) * archOffset;
+                    ctx.lineTo(vx, vy);
+                }
+
+                ctx.closePath();
+
+                // High-End Feather Shading (Velvety Secondary Feather Texture)
+                const grad = ctx.createLinearGradient(
+                    segs[0].pos.x, segs[0].pos.y, 
+                    segs[segs.length - 1].pos.x, segs[segs.length - 1].pos.y
+                );
+                
+                const hue = 210 + (this.index / config.featherCount) * 15;
+                grad.addColorStop(0, `hsl(${hue}, 20%, 18%)`);
+                grad.addColorStop(0.5, `hsl(${hue}, 28%, 32%)`);
+                grad.addColorStop(1, `hsl(${hue}, 35%, 48%)`);
+
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Draw Rachis Spine
+                ctx.beginPath();
+                ctx.moveTo(segs[0].pos.x, segs[0].pos.y);
+                for (let i = 1; i < segs.length; i++) {
+                    ctx.lineTo(segs[i].pos.x, segs[i].pos.y);
+                }
+                ctx.strokeStyle = "rgba(241, 245, 249, 0.75)";
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+
+                // Draw Aerodynamic Vector Force Lines
+                if (config.showVectors) {
+                    const midNode = segs[Math.floor(segs.length / 2)];
+                    
+                    // Green Lift Vector
+                    if (Math.abs(this.currentLiftForce) > 0.5) {
+                        ctx.beginPath();
+                        ctx.moveTo(midNode.pos.x, midNode.pos.y);
+                        const liftEnd = Vector2.add(midNode.pos, Vector2.fromAngle(config.windAngle - Math.PI / 2, this.currentLiftForce * 0.6));
+                        ctx.lineTo(liftEnd.x, liftEnd.y);
+                        ctx.strokeStyle = "#10b981";
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // Inter-Feather Overlap & Contact Physics Engine
+        function resolveInterFeatherContact() {
+            const frictionVal = config.friction;
+            if (frictionVal <= 0.01) return;
+
+            for (let i = 0; i < primaryFeathers.length - 1; i++) {
+                const fA = primaryFeathers[i];     // Lower feather in stack
+                const fB = primaryFeathers[i + 1]; // Upper feather overlapping it
+
+                // Check distance between corresponding spine nodes
+                for (let j = 1; j < fA.nodes.length; j++) {
+                    const nodeA = fA.nodes[j];
+                    const nodeB = fB.nodes[j];
+                    
+                    const dist = nodeA.pos.dist(nodeB.pos);
+                    const minOverlapDist = 28; // Overlap boundary width
+
+                    if (dist < minOverlapDist) {
+                        const overlap = minOverlapDist - dist;
+                        const pushDir = Vector2.sub(nodeB.pos, nodeA.pos).normalize();
+
+                        // Transfer displacement and momentum between neighbors
+                        const force = pushDir.mult(overlap * 0.5 * frictionVal);
+                        
+                        if (!nodeA.pinned) nodeA.pos.sub(force);
+                        if (!nodeB.pinned) nodeB.pos.add(force);
+                    }
+                }
+            }
+        }
+
+        // Global Simulation Context
+        let primaryFeathers = []; // Holds SecondaryFeather instances ($S_1\text{--}S_n$)
+        let ulnaBasePos = new Vector2(0, 0);
+        let ulnaEndPos = new Vector2(0, 0);
+        let ulnaAngle = -Math.PI * 0.82;
+        let draggedNode = null;
+        let isRightDragging = false;
+        let lastMousePos = new Vector2();
+
+        function initUlnaWing() {
+            primaryFeathers = [];
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ulnaBasePos.set(w * 0.25, h * 0.52);
+            const ulnaLength = 320;
+            ulnaEndPos = Vector2.fromAngle(ulnaAngle, ulnaLength).add(ulnaBasePos);
+
+            const count = config.featherCount;
+
+            for (let i = 0; i < count; i++) {
+                const ratio = i / (count - 1);
+                // Secondary quills are rooted evenly along the Ulna forearm bone
+                const rootPos = Vector2.add(
+                    ulnaBasePos, 
+                    Vector2.sub(ulnaEndPos, ulnaBasePos).mult(ratio)
+                );
+
+                // Secondary feathers extend outward perpendicular to the ulna bone
+                const featherLength = 170 + Math.sin(ratio * Math.PI) * 50; // Broad curved trailing edge
+                const baseAngle = ulnaAngle + Math.PI / 2 + (ratio - 0.5) * 0.15;
+
+                primaryFeathers.push(new SecondaryFeather(i, count, rootPos, baseAngle, featherLength));
+            }
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initUlnaWing();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Interactive Handlers
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouse = new Vector2(e.clientX - rect.left, e.clientY - rect.top);
+            lastMousePos.set(mouse.x, mouse.y);
+
+            if (e.button === 2) {
+                isRightDragging = true;
+                return;
+            }
+
+            let closestDist = Infinity;
+            draggedNode = null;
+
+            primaryFeathers.forEach(f => {
+                f.nodes.forEach((node, idx) => {
+                    if (idx === 0) return;
+                    const d = node.pos.dist(mouse);
+                    if (d < 35 && d < closestDist) {
+                        closestDist = d;
+                        draggedNode = node;
+                    }
+                });
+            });
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouse = new Vector2(e.clientX - rect.left, e.clientY - rect.top);
+
+            if (draggedNode) {
+                draggedNode.pos.set(mouse.x, mouse.y);
+                draggedNode.oldPos.set(mouse.x, mouse.y);
+            } else if (isRightDragging) {
+                const delta = Vector2.sub(mouse, lastMousePos);
+                ulnaAngle += delta.x * 0.005;
+                initUlnaWing();
+            }
+
+            lastMousePos.set(mouse.x, mouse.y);
+        });
+
+        window.addEventListener('mouseup', () => {
+            draggedNode = null;
+            isRightDragging = false;
+        });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Boundary Layer Airflow Streamlines Visualizer
+        const streamlines = Array.from({ length: 45 }, () => ({
+            pos: new Vector2(Math.random() * 1200, Math.random() * 800),
+            life: Math.random() * 100
+        }));
+
+        function drawAirflow(windVel) {
+            if (!config.showStreamlines) return;
+
+            ctx.save();
+            const isStalled = config.aoa > 22;
+            ctx.strokeStyle = isStalled ? "rgba(245, 158, 11, 0.25)" : "rgba(56, 189, 248, 0.18)";
+            ctx.lineWidth = 1.5;
+
+            const speed = windVel.mag();
+            const dir = windVel.clone().normalize();
+
+            streamlines.forEach(p => {
+                const step = Vector2.mult(dir, speed * 0.4);
+                
+                // Introduce turbulent eddies if wing is in stall state
+                if (isStalled) {
+                    step.add(new Vector2((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8));
+                }
+
+                p.pos.add(step);
+                p.life += 1;
+
+                if (p.life > 90 || p.pos.x < -50 || p.pos.x > canvas.width + 50 || p.pos.y < -50 || p.pos.y > canvas.height + 50) {
+                    p.pos.set(
+                        dir.x < 0 ? canvas.width + Math.random() * 50 : -Math.random() * 50,
+                        Math.random() * canvas.height
+                    );
+                    p.life = 0;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(p.pos.x, p.pos.y);
+                const tail = Vector2.sub(p.pos, Vector2.mult(dir, Math.min(speed * 2, 35)));
+                ctx.lineTo(tail.x, tail.y);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        // Draw Ulna Forearm Bone
+        function drawUlnaBone() {
+            ctx.save();
+            
+            // Ulna bone shaft
+            ctx.beginPath();
+            ctx.moveTo(ulnaBasePos.x, ulnaBasePos.y);
+            ctx.lineTo(ulnaEndPos.x, ulnaEndPos.y);
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+            ctx.lineWidth = 18;
+            ctx.lineCap = "round";
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(241, 245, 249, 0.85)";
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            // Quill attachment papillae nodes along bone
+            primaryFeathers.forEach(f => {
+                ctx.beginPath();
+                ctx.arc(f.rootPos.x, f.rootPos.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = "#38bdf8";
+                ctx.fill();
+            });
+
+            ctx.restore();
+        }
+
+        // Animation Loop
+        let lastTime = performance.now();
+        function animate(currentTime) {
+            const dt = Math.min((currentTime - lastTime) / 1000, 0.032);
+            lastTime = currentTime;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const windVel = Vector2.fromAngle(config.windAngle, config.windSpeed * 10);
+
+            // Draw Boundary Layer Airflow
+            drawAirflow(windVel);
+
+            // Update Physics Engine & Resolve Overlap Constraints
+            let totalLift = 0;
+            let totalPressure = 0;
+
+            primaryFeathers.forEach(feather => {
+                feather.updatePhysics(dt, windVel);
+                totalLift += feather.currentLiftForce;
+                totalPressure += feather.camberFlex;
+            });
+
+            resolveInterFeatherContact();
+
+            // Render Wing Structure (Outer to Inner feather order)
+            drawUlnaBone();
+            primaryFeathers.forEach(feather => feather.draw(ctx));
+
+            // Update Real-Time HUD Elements
+            const isStalled = config.aoa > 22;
+            const liftEl = document.getElementById('hud-lift');
+            const stallEl = document.getElementById('hud-stall');
+
+            liftEl.textContent = (totalLift * 0.12).toFixed(2) + " N";
+            document.getElementById('hud-pressure').textContent = (totalPressure * 1.8).toFixed(1) + " kPa";
+
+            if (isStalled) {
+                stallEl.textContent = "STALLED (TURBULENT)";
+                stallEl.classList.add('warning');
+            } else {
+                stallEl.textContent = "LAMINAR FLOW";
+                stallEl.classList.remove('warning');
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize Engine
+        resizeCanvas();
+        requestAnimationFrame(animate);
+
+    </script>
+</body>
+</html>
